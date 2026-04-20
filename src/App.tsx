@@ -125,7 +125,7 @@ export default function App() {
     const arrayKeys: (keyof AppState)[] = [
       'items', 'categories', 'locations', 'operations', 'warehouses',
       'partners', 'barcodes', 'locationStocks', 'warehouseStocks',
-      'workOrders', 'receipts', 'techDocs',
+      'workOrders', 'receipts', 'techDocs', 'invoiceTemplates',
     ];
 
     const mergeById = (loc: Array<Record<string, unknown>>, srv: Array<Record<string, unknown>>) => {

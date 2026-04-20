@@ -193,16 +193,17 @@ TABLE_COLUMNS = {
     "work_orders": ["id", "number", "title", "status", "created_by", "recipient_id",
                      "recipient_name", "receiver_rank", "receiver_name",
                      "issuer_rank", "issuer_name", "requester_rank", "requester_name",
-                     "created_at", "updated_at", "comment"],
+                     "created_at", "updated_at", "comment", "warehouse_id"],
     "order_items": ["id", "order_id", "item_id", "required_qty", "picked_qty", "status"],
     "receipts": ["id", "number", "status", "supplier_id", "supplier_name", "warehouse_id",
                   "date", "created_by", "comment", "total_amount", "posted_at",
-                  "custom_fields", "scan_history", "photo_url"],
+                  "custom_fields", "scan_history", "photo_url", "attachments"],
     "receipt_lines": ["id", "receipt_id", "item_id", "item_name", "qty", "confirmed_qty",
                        "location_id", "price", "unit", "is_new"],
     "tech_docs": ["id", "item_id", "doc_number", "doc_date", "doc_type", "supplier",
                    "notes", "custom_fields", "attachments", "cover_url", "created_at", "updated_at",
                    "created_by"],
+    "invoice_templates": ["id", "name", "size", "mime_type", "data_url", "uploaded_at"],
     "app_settings": ["key", "value"],
 }
 
@@ -222,6 +223,7 @@ TABLE_PKS = {
     "receipts": ["id"],
     "receipt_lines": ["id"],
     "tech_docs": ["id"],
+    "invoice_templates": ["id"],
     "app_settings": ["key"],
 }
 
@@ -267,6 +269,7 @@ def _load_all(cur) -> dict:
     location_stocks = [_row_to_camel(r) for r in _fetch_all(cur, "location_stocks", "item_id")]
     warehouse_stocks = [_row_to_camel(r) for r in _fetch_all(cur, "warehouse_stocks", "item_id")]
     tech_docs = [_row_to_camel(r) for r in _fetch_all(cur, "tech_docs", "created_at")]
+    invoice_templates = [_row_to_camel(r) for r in _fetch_all(cur, "invoice_templates", "uploaded_at")]
 
     # Work orders with nested items
     wo_rows = _fetch_all(cur, "work_orders", "created_at")
@@ -312,6 +315,8 @@ def _load_all(cur) -> dict:
             rc_camel["customFields"] = []
         if rc_camel.get("scanHistory") is None:
             rc_camel["scanHistory"] = []
+        if rc_camel.get("attachments") is None:
+            rc_camel["attachments"] = []
         receipts.append(rc_camel)
 
     # Tech docs: ensure customFields and attachments are lists
@@ -343,6 +348,7 @@ def _load_all(cur) -> dict:
         "workOrders": work_orders,
         "receipts": receipts,
         "techDocs": tech_docs,
+        "invoiceTemplates": invoice_templates,
     }
 
     # Add scalar settings
@@ -358,7 +364,7 @@ def _load_all(cur) -> dict:
 TRUNCATE_ORDER = [
     "order_items", "receipt_lines", "operations", "barcodes",
     "location_stocks", "warehouse_stocks",
-    "work_orders", "receipts", "tech_docs",
+    "work_orders", "receipts", "tech_docs", "invoice_templates",
     "items", "locations", "categories", "warehouses", "partners",
     "app_settings",
 ]
@@ -454,6 +460,12 @@ def _save_all(cur, data: dict):
         row = _prepare_row("tech_docs", td)
         if row:
             _upsert(cur, "tech_docs", row, TABLE_PKS["tech_docs"])
+
+    # Insert invoice templates
+    for tpl in data.get("invoiceTemplates", []):
+        row = _prepare_row("invoice_templates", tpl)
+        if row:
+            _upsert(cur, "invoice_templates", row, TABLE_PKS["invoice_templates"])
 
     # Insert settings
     scalar_fields = {
@@ -770,6 +782,19 @@ def _action_upsert_location_stock(cur, body: dict):
         _upsert(cur, "location_stocks", ls_row, TABLE_PKS["location_stocks"])
 
 
+def _action_upsert_invoice_template(cur, body: dict):
+    tpl = body.get("invoiceTemplate") or body.get("template") or {}
+    row = _prepare_row("invoice_templates", tpl)
+    if row:
+        _upsert(cur, "invoice_templates", row, TABLE_PKS["invoice_templates"])
+
+
+def _action_delete_invoice_template(cur, body: dict):
+    tid = body.get("invoiceTemplateId") or body.get("templateId") or body.get("id")
+    if tid:
+        cur.execute(f"DELETE FROM {_table('invoice_templates')} WHERE id = %s", (tid,))
+
+
 def _action_update_setting(cur, body: dict):
     key = body.get("key")
     value = body.get("value")
@@ -809,6 +834,8 @@ POST_ACTIONS = {
     "upsert_tech_doc": _action_upsert_tech_doc,
     "delete_tech_doc": _action_delete_tech_doc,
     "upsert_location_stock": _action_upsert_location_stock,
+    "upsert_invoice_template": _action_upsert_invoice_template,
+    "delete_invoice_template": _action_delete_invoice_template,
     "update_setting": _action_update_setting,
     "update_settings": _action_update_settings,
 }

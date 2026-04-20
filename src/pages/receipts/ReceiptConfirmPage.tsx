@@ -5,7 +5,7 @@ import Icon from '@/components/ui/icon';
 import {
   AppState, crudAction, generateId,
   Receipt, ReceiptLine, ScanEvent,
-  updateWarehouseStock, Operation,
+  updateWarehouseStock, Operation, Barcode,
 } from '@/data/store';
 
 type ScanResult = { ok: true; line: ReceiptLine } | { ok: false; reason: string };
@@ -44,6 +44,9 @@ export function ReceiptConfirmPage({
   const [notif, setNotif] = useState<{ type: NotifType; msg: string; itemName?: string } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [posting, setPosting] = useState(false);
+
+  // Привязка неизвестного QR к товару из заявки (добавление в реестр штрих-кодов)
+  const [bindPrompt, setBindPrompt] = useState<{ code: string; forLineId?: string } | null>(null);
 
   // per-line inline scanner state
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
@@ -125,6 +128,14 @@ export function ReceiptConfirmPage({
       return;
     }
 
+    const barcodes = state.barcodes || [];
+    const knownBarcode = barcodes.find(b => b.code === code);
+    if (!knownBarcode) {
+      // Неизвестный код — предлагаем привязать его к товару из заявки
+      setBindPrompt({ code });
+      return;
+    }
+
     const result = findLineByCode(liveReceipt, code, state);
 
     if (!result.ok) {
@@ -191,6 +202,19 @@ export function ReceiptConfirmPage({
 
     if (targetLine.confirmedQty >= targetLine.qty) {
       showNotif('error', `«${targetLine.itemName}» уже принят полностью (${targetLine.qty} ${targetLine.unit})`);
+      return;
+    }
+
+    const barcodes = state.barcodes || [];
+    const knownBarcode = barcodes.find(b => b.code === code);
+    if (!knownBarcode) {
+      // Неизвестный код — предлагаем сразу привязать к товару этой строки
+      setBindPrompt({ code, forLineId: lineId });
+      return;
+    }
+    if (knownBarcode.itemId !== targetLine.itemId) {
+      const bindItem = state.items.find(i => i.id === knownBarcode.itemId);
+      showNotif('error', `Код «${code.slice(0, 20)}» привязан к «${bindItem?.name || 'другому товару'}»`);
       return;
     }
 
@@ -310,6 +334,67 @@ export function ReceiptConfirmPage({
       const msg = err instanceof Error ? err.message : String(err);
       setLineCameraError(msg.includes('Permission') ? 'Нет доступа к камере. Разрешите в настройках браузера.' : 'Не удалось открыть камеру: ' + msg);
     }
+  };
+
+  // Подтверждение привязки нового QR-кода к товару (из заявки) + занесение в реестр
+  const confirmBind = (lineId: string) => {
+    if (!bindPrompt) return;
+    const code = bindPrompt.code;
+    const line = liveReceipt.lines.find(l => l.id === lineId);
+    if (!line) { setBindPrompt(null); return; }
+
+    const newBarcode: Barcode = {
+      id: generateId(),
+      itemId: line.itemId,
+      code,
+      format: 'QR_CODE',
+      label: `Из приёмки ${liveReceipt.number}`,
+      createdAt: new Date().toISOString(),
+    };
+
+    // 1) добавляем в реестр barcodes
+    const baseState: AppState = {
+      ...state,
+      barcodes: [...(state.barcodes || []), newBarcode],
+    };
+    onStateChange(baseState);
+    crudAction('upsert_barcode', { barcode: newBarcode });
+
+    setBindPrompt(null);
+
+    // 2) и сразу принимаем +1 по этой строке как при обычном скане
+    if (line.confirmedQty >= line.qty) {
+      showNotif('error', `«${line.itemName}» уже принят полностью`);
+      return;
+    }
+    const scanEvent: ScanEvent = {
+      id: generateId(),
+      code,
+      itemId: line.itemId,
+      lineId: line.id,
+      scannedAt: new Date().toISOString(),
+      scannedBy: state.currentUser,
+      method: 'manual',
+    };
+    const updatedLines = liveReceipt.lines.map(l =>
+      l.id === line.id ? { ...l, confirmedQty: (l.confirmedQty || 0) + 1 } : l
+    );
+    const updatedReceipt: Receipt = {
+      ...liveReceipt,
+      status: 'confirming',
+      lines: updatedLines,
+      scanHistory: [...(liveReceipt.scanHistory || []), scanEvent],
+    };
+    const next: AppState = {
+      ...baseState,
+      receipts: baseState.receipts.map(r => r.id === liveReceipt.id ? updatedReceipt : r),
+    };
+    onStateChange(next);
+    crudAction('upsert_receipt', { receipt: updatedReceipt, receiptLines: updatedReceipt.lines });
+
+    const item = state.items.find(i => i.id === line.itemId);
+    const lineConfirmed = updatedLines.find(l => l.id === line.id)?.confirmedQty || 0;
+    showNotif('success', `Код привязан. +1 принято (${lineConfirmed}/${line.qty} ${line.unit})`, item?.name || line.itemName);
   };
 
   const handleManualAdd = () => {
@@ -791,6 +876,85 @@ export function ReceiptConfirmPage({
           </div>
         )}
       </div>
+
+      {/* Диалог привязки нового QR-кода к товару из заявки */}
+      {bindPrompt && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-3"
+          onClick={() => setBindPrompt(null)}
+        >
+          <div
+            className="bg-card w-full max-w-md rounded-2xl shadow-2xl border border-border overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-border flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                <Icon name="QrCode" size={20} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-base">Новый QR-код</div>
+                <div className="text-xs text-muted-foreground mt-0.5 break-all">
+                  Код: <span className="font-mono text-foreground">{bindPrompt.code.slice(0, 40)}{bindPrompt.code.length > 40 ? '…' : ''}</span>
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Этот код не найден в реестре. Выберите товар, к которому его привязать — код будет занесён в реестр штрих-кодов.
+                </div>
+              </div>
+              <button
+                onClick={() => setBindPrompt(null)}
+                className="p-1.5 rounded-lg hover:bg-muted shrink-0"
+              >
+                <Icon name="X" size={16} />
+              </button>
+            </div>
+
+            <div className="max-h-[50vh] overflow-y-auto p-2 space-y-1">
+              {lines.map(l => {
+                const item = state.items.find(i => i.id === l.itemId);
+                const full = l.confirmedQty >= l.qty;
+                const isTarget = bindPrompt.forLineId && bindPrompt.forLineId === l.id;
+                return (
+                  <button
+                    key={l.id}
+                    onClick={() => confirmBind(l.id)}
+                    disabled={full}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${
+                      full
+                        ? 'bg-muted/40 opacity-60 cursor-not-allowed'
+                        : isTarget
+                          ? 'bg-primary/10 border border-primary/40 hover:bg-primary/15'
+                          : 'hover:bg-muted border border-transparent'
+                    }`}
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      <Icon name="Package" size={16} className="text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{item?.name || l.itemName}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {l.confirmedQty}/{l.qty} {l.unit}{full ? ' · принят' : ''}
+                      </div>
+                    </div>
+                    {!full && (
+                      <Icon name="ChevronRight" size={16} className="text-muted-foreground shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="p-3 border-t border-border">
+              <Button
+                variant="outline"
+                onClick={() => setBindPrompt(null)}
+                className="w-full h-10"
+              >
+                Отмена
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

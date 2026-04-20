@@ -252,6 +252,7 @@ export type AppState = {
   warehouses: Warehouse[];
   warehouseStocks: WarehouseStock[];
   barcodes: Barcode[];
+  invoiceTemplates: Attachment[];
   darkMode: boolean;
   defaultLowStockThreshold: number;
   currentUser: string;
@@ -272,6 +273,7 @@ const initialState: AppState = {
   receipts: [],
   techDocs: [],
   barcodes: [],
+  invoiceTemplates: [],
   warehouses: [
     { id: 'wh-1', name: 'Главный склад', address: 'ул. Складская, 1', description: 'Основной склад хранения', createdAt: '2024-01-01' },
     { id: 'wh-2', name: 'Склад №2', address: 'ул. Промышленная, 5', description: 'Дополнительный склад', createdAt: '2024-01-01' },
