@@ -119,44 +119,44 @@ export default function App() {
   }, []);
 
   const mergeServerState = useCallback((local: AppState, server: AppState): AppState => {
+    const RECENT_LOCAL_WINDOW_MS = 8000;
+    const recentLocalChange = Date.now() - Math.max(lastLocalSaveRef.current, getLastCrudAt()) < RECENT_LOCAL_WINDOW_MS;
+
     const arrayKeys: (keyof AppState)[] = [
       'items', 'categories', 'locations', 'operations', 'warehouses',
       'partners', 'barcodes', 'locationStocks', 'warehouseStocks',
       'workOrders', 'receipts', 'techDocs',
     ];
+
     const mergeById = (loc: Array<Record<string, unknown>>, srv: Array<Record<string, unknown>>) => {
       const locById = new Map(loc.map(x => [x.id as string, x]));
       const result = srv.map(sObj => {
         const lObj = locById.get(sObj.id as string);
         if (!lObj) return sObj;
-        const merged: Record<string, unknown> = { ...lObj };
-        for (const [k, v] of Object.entries(sObj)) {
-          const lv = (lObj as Record<string, unknown>)[k];
-          const serverHas = v !== null && v !== undefined && v !== '';
-          const localHas = lv !== null && lv !== undefined && lv !== '';
-          if (serverHas) merged[k] = v;
-          else if (localHas) merged[k] = lv;
-          else merged[k] = v;
-        }
-        return merged;
+        return sObj;
       });
-      const srvIds = new Set(srv.map(x => x.id as string));
-      for (const lObj of loc) {
-        if (!srvIds.has(lObj.id as string)) result.push(lObj);
+      if (recentLocalChange) {
+        const srvIds = new Set(srv.map(x => x.id as string));
+        for (const lObj of loc) {
+          if (!srvIds.has(lObj.id as string)) result.push(lObj);
+        }
       }
       return result;
     };
+
     const merged: AppState = { ...local, ...server };
     for (const k of arrayKeys) {
       const srv = (server[k] as Array<Record<string, unknown>>) || [];
       const loc = (local[k] as Array<Record<string, unknown>>) || [];
-      if ((!srv || srv.length === 0) && loc.length > 0) {
+      if ((!srv || srv.length === 0) && loc.length > 0 && recentLocalChange) {
         (merged as Record<string, unknown>)[k as string] = loc;
         continue;
       }
       const hasId = srv.length > 0 && 'id' in srv[0];
-      if (hasId && loc.length > 0) {
+      if (hasId) {
         (merged as Record<string, unknown>)[k as string] = mergeById(loc, srv);
+      } else {
+        (merged as Record<string, unknown>)[k as string] = srv;
       }
     }
     return merged;
