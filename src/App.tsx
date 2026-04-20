@@ -21,8 +21,13 @@ import InvoiceTemplatePage from '@/pages/InvoiceTemplatePage';
 import LoginPage from '@/pages/LoginPage';
 import { AuthContext, AuthUser, apiLogin, apiLogout, apiMe, setToken, getToken, clearToken } from '@/data/auth';
 import InstallPWABanner from '@/components/InstallPWABanner';
+import { realtime, RealtimeStatus } from '@/data/realtime';
+import RealtimeIndicator from '@/components/RealtimeIndicator';
 
-const POLL_INTERVAL = 5000;
+// WS — основной канал синхронизации. Polling остаётся как fallback:
+// если WebSocket отвалился (не поднят сервер, прокси режет) — включаем опрос.
+const POLL_INTERVAL_ONLINE = 30000;   // 30 сек — когда WS работает, на случай пропуска сообщения
+const POLL_INTERVAL_OFFLINE = 5000;   // 5 сек — когда WS отвалился, работаем как раньше
 
 function parseQRParams() {
   const params = new URLSearchParams(window.location.search);
@@ -223,19 +228,22 @@ export default function App() {
     });
   }, [mergeServerState]);
 
-  const poll = useCallback(async () => {
+  // Единая функция загрузки актуального состояния с сервера и мерджа в локальное.
+  // Используется и WS-сигналом (мгновенно), и polling-fallback.
+  const pullAndMerge = useCallback(async (opts?: { force?: boolean }) => {
     const QUIET_WINDOW_MS = 15000;
-    const lastChange = Math.max(lastLocalSaveRef.current, getLastCrudAt());
-    if (Date.now() - lastChange < QUIET_WINDOW_MS) return;
-    const remoteTs = await checkServerUpdatedAt();
-    if (!remoteTs) return;
-    if (remoteTs === serverUpdatedAtRef.current) return;
-    if (Date.now() - Math.max(lastLocalSaveRef.current, getLastCrudAt()) < QUIET_WINDOW_MS) return;
+    const force = opts?.force === true;
+    if (!force) {
+      const lastChange = Math.max(lastLocalSaveRef.current, getLastCrudAt());
+      if (Date.now() - lastChange < QUIET_WINDOW_MS) return;
+      const remoteTs = await checkServerUpdatedAt();
+      if (!remoteTs) return;
+      if (remoteTs === serverUpdatedAtRef.current) return;
+      if (Date.now() - Math.max(lastLocalSaveRef.current, getLastCrudAt()) < QUIET_WINDOW_MS) return;
+    }
     const result = await loadStateFromServer();
     if (!result) return;
-    // Ещё одна проверка — после загрузки. Если за это время пришёл локальный crud,
-    // откладываем merge до следующего цикла.
-    if (Date.now() - Math.max(lastLocalSaveRef.current, getLastCrudAt()) < QUIET_WINDOW_MS) return;
+    if (!force && Date.now() - Math.max(lastLocalSaveRef.current, getLastCrudAt()) < QUIET_WINDOW_MS) return;
     serverUpdatedAtRef.current = result.updatedAt;
     setState(prev => {
       const merged = mergeServerState(prev, result.state);
@@ -244,10 +252,33 @@ export default function App() {
     });
   }, [mergeServerState]);
 
+  // ─── Realtime: WebSocket (главный канал) + polling (fallback) ───
+  const [wsStatus, setWsStatus] = useState<RealtimeStatus>('connecting');
+
   useEffect(() => {
-    const id = setInterval(poll, POLL_INTERVAL);
+    // Подписка на сигналы от сервера: кто-то сохранил изменение — подтянуть свежее состояние
+    const offMsg = realtime.onMessage((msg) => {
+      if (msg.type !== 'state_changed') return;
+      // Маленькая задержка — чтобы не конфликтовать с собственным upsert-ом.
+      // Если мы сами только что меняли — pullAndMerge сам отложит merge на 15 сек.
+      pullAndMerge();
+    });
+    const offStatus = realtime.onStatus(setWsStatus);
+    realtime.connect();
+    return () => {
+      offMsg();
+      offStatus();
+      // Не закрываем соединение при unmount корневого компонента — но это и не произойдёт
+      // в нормальной работе. На всякий случай оставляем WS живым.
+    };
+  }, [pullAndMerge]);
+
+  useEffect(() => {
+    // Polling-fallback. Интервал меняется в зависимости от статуса WS.
+    const interval = wsStatus === 'online' ? POLL_INTERVAL_ONLINE : POLL_INTERVAL_OFFLINE;
+    const id = setInterval(() => { pullAndMerge(); }, interval);
     return () => clearInterval(id);
-  }, [poll]);
+  }, [pullAndMerge, wsStatus]);
 
   const handleStateChange = useCallback((s: AppState) => {
     lastLocalSaveRef.current = Date.now();
@@ -313,6 +344,7 @@ export default function App() {
           {page === 'audit'        && <AuditPage state={state} />}
           {page === 'settings'     && <SettingsPage state={state} onStateChange={handleStateChange} />}
         </Layout>
+        <RealtimeIndicator status={wsStatus} />
         <InstallPWABanner />
       </TooltipProvider>
     </AuthContext.Provider>

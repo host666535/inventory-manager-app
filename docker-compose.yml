@@ -20,6 +20,22 @@ services:
       timeout: 3s
       retries: 10
 
+  # ─── WebSocket Realtime Server ──────────────────────────
+  # Лёгкий push-сервер, рассылает сигналы "данные изменились"
+  # всем подключённым клиентам. Backend шлёт broadcast сюда,
+  # фронт подписан через ws://.../ws
+  websocket:
+    build:
+      context: ./docker/websocket
+    restart: unless-stopped
+    environment:
+      WS_PORT: 8081
+      WS_HTTP_PORT: 8082
+    ports:
+      - "8081:8081"
+    expose:
+      - "8082"
+
   # ─── Backend API (Python + Flask) ───────────────────────
   backend:
     build:
@@ -29,11 +45,15 @@ services:
       DATABASE_URL: postgresql://stockbase:${DB_PASSWORD:-stockbase_secret}@db:5432/stockbase
       DB_SCHEMA: public
       PORT: 8080
+      # Внутренний адрес WS-сервера для broadcast-сигналов
+      WS_BROADCAST_URL: http://websocket:8082/broadcast
     ports:
       - "8080:8080"
     depends_on:
       db:
         condition: service_healthy
+      websocket:
+        condition: service_started
 
   # ─── Frontend (Vite build + Nginx) ─────────────────────
   frontend:
@@ -47,6 +67,7 @@ services:
       - "3000:80"
     depends_on:
       - backend
+      - websocket
 
 volumes:
   pgdata:

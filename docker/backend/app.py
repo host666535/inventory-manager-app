@@ -7,7 +7,9 @@ import json
 import os
 import re
 import uuid
+import threading
 import urllib.request
+import urllib.error
 from datetime import datetime, date, timedelta, timezone
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -19,6 +21,36 @@ app = Flask(__name__)
 CORS(app)
 
 SCHEMA = os.environ.get("DB_SCHEMA", "public")
+WS_BROADCAST_URL = os.environ.get("WS_BROADCAST_URL", "").strip()
+
+
+def ws_broadcast(action: str, updated_at: str = "", meta: dict | None = None) -> None:
+    """Шлёт сигнал "данные изменились" на WS-сервер (fire-and-forget).
+    Выполняется в отдельном потоке, чтобы не тормозить ответ клиенту.
+    Ошибки молча игнорируем — WS-сервер может быть временно недоступен,
+    это не должно ломать основной запрос.
+    """
+    if not WS_BROADCAST_URL:
+        return
+    payload = json.dumps({
+        "action": action,
+        "updatedAt": updated_at or datetime.now(timezone.utc).isoformat(),
+        "meta": meta or {},
+    }).encode("utf-8")
+
+    def _send():
+        try:
+            req = urllib.request.Request(
+                WS_BROADCAST_URL,
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=2).read()
+        except Exception:
+            pass
+
+    threading.Thread(target=_send, daemon=True).start()
 
 # ── camelCase <-> snake_case ─────────────────────────────────────────────────
 
@@ -591,6 +623,7 @@ def crud_handler():
                 cur.execute("SELECT NOW()")
                 ts = cur.fetchone()[0]
                 conn.close()
+                ws_broadcast("save_all", ts.isoformat())
                 return jsonify({"ok": True, "updatedAt": ts.isoformat()})
 
             handler_fn = ACTION_MAP.get(action)
@@ -600,8 +633,11 @@ def crud_handler():
 
             handler_fn(cur, body)
             conn.commit()
+            cur.execute("SELECT NOW()")
+            ts = cur.fetchone()[0]
             conn.close()
-            return jsonify({"ok": True})
+            ws_broadcast(action, ts.isoformat())
+            return jsonify({"ok": True, "updatedAt": ts.isoformat()})
 
     except Exception as e:
         conn.rollback()
