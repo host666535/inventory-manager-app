@@ -119,7 +119,7 @@ export default function App() {
   }, []);
 
   const mergeServerState = useCallback((local: AppState, server: AppState): AppState => {
-    const RECENT_LOCAL_WINDOW_MS = 8000;
+    const RECENT_LOCAL_WINDOW_MS = 15000;
     const recentLocalChange = Date.now() - Math.max(lastLocalSaveRef.current, getLastCrudAt()) < RECENT_LOCAL_WINDOW_MS;
 
     const arrayKeys: (keyof AppState)[] = [
@@ -128,36 +128,58 @@ export default function App() {
       'workOrders', 'receipts', 'techDocs', 'invoiceTemplates',
     ];
 
-    const mergeById = (loc: Array<Record<string, unknown>>, srv: Array<Record<string, unknown>>) => {
-      const locById = new Map(loc.map(x => [x.id as string, x]));
-      const result = srv.map(sObj => {
-        const lObj = locById.get(sObj.id as string);
-        if (!lObj) return sObj;
-        return sObj;
-      });
+    // Ключ уникальности записи (для stocks нет id — используем составной ключ)
+    const keyOf = (tableKey: string, obj: Record<string, unknown>): string => {
+      if (tableKey === 'locationStocks') return `${obj.itemId}::${obj.locationId}`;
+      if (tableKey === 'warehouseStocks') return `${obj.itemId}::${obj.warehouseId}`;
+      return (obj.id as string) || '';
+    };
+
+    // Смёрдж массива сущностей с учётом локальных удалений/добавлений
+    const mergeArray = (
+      tableKey: string,
+      loc: Array<Record<string, unknown>>,
+      srv: Array<Record<string, unknown>>,
+    ) => {
+      const locMap = new Map(loc.map(x => [keyOf(tableKey, x), x]));
+      const srvMap = new Map(srv.map(x => [keyOf(tableKey, x), x]));
+
+      // Если недавно были локальные изменения — доверяем локальному состоянию:
+      // • элементы, которых нет локально, но есть на сервере = удалены локально → НЕ возвращаем
+      // • элементы, которых нет на сервере, но есть локально = добавлены локально → оставляем
+      // • общие элементы — берём с сервера (он был обновлён нашим upsert)
       if (recentLocalChange) {
-        const srvIds = new Set(srv.map(x => x.id as string));
-        for (const lObj of loc) {
-          if (!srvIds.has(lObj.id as string)) result.push(lObj);
+        const result: Array<Record<string, unknown>> = [];
+        // Идём по локальному (сохраняем порядок)
+        for (const [k, lObj] of locMap) {
+          const sObj = srvMap.get(k);
+          result.push(sObj || lObj);
         }
+        // Добавляем новое с сервера (от других устройств), которого локально не было
+        // — только если это НЕ удаление (у нас этих ID локально нет вовсе).
+        // Но если запись исчезла локально именно сейчас — она не должна вернуться.
+        // Компромисс: при recentLocalChange мы НЕ добавляем серверные записи,
+        // которых нет локально — иначе удаление вернёт их обратно.
+        return result;
       }
-      return result;
+
+      // Нет свежих локальных изменений — полностью принимаем сервер как источник истины
+      return srv;
     };
 
     const merged: AppState = { ...local, ...server };
     for (const k of arrayKeys) {
       const srv = (server[k] as Array<Record<string, unknown>>) || [];
       const loc = (local[k] as Array<Record<string, unknown>>) || [];
+
+      // Если сервер пуст, а локально есть данные и были недавние изменения —
+      // оставляем локальные (сервер ещё не успел применить)
       if ((!srv || srv.length === 0) && loc.length > 0 && recentLocalChange) {
         (merged as Record<string, unknown>)[k as string] = loc;
         continue;
       }
-      const hasId = srv.length > 0 && 'id' in srv[0];
-      if (hasId) {
-        (merged as Record<string, unknown>)[k as string] = mergeById(loc, srv);
-      } else {
-        (merged as Record<string, unknown>)[k as string] = srv;
-      }
+
+      (merged as Record<string, unknown>)[k as string] = mergeArray(k as string, loc, srv);
     }
     return merged;
   }, []);
@@ -202,14 +224,18 @@ export default function App() {
   }, [mergeServerState]);
 
   const poll = useCallback(async () => {
+    const QUIET_WINDOW_MS = 15000;
     const lastChange = Math.max(lastLocalSaveRef.current, getLastCrudAt());
-    if (Date.now() - lastChange < 8000) return;
+    if (Date.now() - lastChange < QUIET_WINDOW_MS) return;
     const remoteTs = await checkServerUpdatedAt();
     if (!remoteTs) return;
     if (remoteTs === serverUpdatedAtRef.current) return;
-    if (Date.now() - Math.max(lastLocalSaveRef.current, getLastCrudAt()) < 8000) return;
+    if (Date.now() - Math.max(lastLocalSaveRef.current, getLastCrudAt()) < QUIET_WINDOW_MS) return;
     const result = await loadStateFromServer();
     if (!result) return;
+    // Ещё одна проверка — после загрузки. Если за это время пришёл локальный crud,
+    // откладываем merge до следующего цикла.
+    if (Date.now() - Math.max(lastLocalSaveRef.current, getLastCrudAt()) < QUIET_WINDOW_MS) return;
     serverUpdatedAtRef.current = result.updatedAt;
     setState(prev => {
       const merged = mergeServerState(prev, result.state);
