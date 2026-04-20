@@ -230,20 +230,21 @@ export default function App() {
 
   // Единая функция загрузки актуального состояния с сервера и мерджа в локальное.
   // Используется и WS-сигналом (мгновенно), и polling-fallback.
-  const pullAndMerge = useCallback(async (opts?: { force?: boolean }) => {
+  // Параметр `skipQuietCheck` — для WS-сигналов: они приходят от ЧУЖИХ изменений,
+  // и ждать тишины после своего локального сохранения тут не нужно —
+  // merge-функция сама защитит локальные правки через recentLocalChange.
+  const pullAndMerge = useCallback(async (opts?: { skipQuietCheck?: boolean }) => {
     const QUIET_WINDOW_MS = 15000;
-    const force = opts?.force === true;
-    if (!force) {
+    const skip = opts?.skipQuietCheck === true;
+    if (!skip) {
       const lastChange = Math.max(lastLocalSaveRef.current, getLastCrudAt());
       if (Date.now() - lastChange < QUIET_WINDOW_MS) return;
       const remoteTs = await checkServerUpdatedAt();
       if (!remoteTs) return;
       if (remoteTs === serverUpdatedAtRef.current) return;
-      if (Date.now() - Math.max(lastLocalSaveRef.current, getLastCrudAt()) < QUIET_WINDOW_MS) return;
     }
     const result = await loadStateFromServer();
     if (!result) return;
-    if (!force && Date.now() - Math.max(lastLocalSaveRef.current, getLastCrudAt()) < QUIET_WINDOW_MS) return;
     serverUpdatedAtRef.current = result.updatedAt;
     setState(prev => {
       const merged = mergeServerState(prev, result.state);
@@ -256,16 +257,20 @@ export default function App() {
   const [wsStatus, setWsStatus] = useState<RealtimeStatus>('connecting');
 
   useEffect(() => {
-    // Подписка на сигналы от сервера: кто-то сохранил изменение — подтянуть свежее состояние
+    // Подписка на сигналы от сервера: кто-то сохранил изменение — подтянуть свежее состояние.
+    // Небольшой дебаунс, чтобы серия событий (напр. целая заявка) тянулась одним load_all.
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const offMsg = realtime.onMessage((msg) => {
       if (msg.type !== 'state_changed') return;
-      // Маленькая задержка — чтобы не конфликтовать с собственным upsert-ом.
-      // Если мы сами только что меняли — pullAndMerge сам отложит merge на 15 сек.
-      pullAndMerge();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        pullAndMerge({ skipQuietCheck: true });
+      }, 150);
     });
     const offStatus = realtime.onStatus(setWsStatus);
     realtime.connect();
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       offMsg();
       offStatus();
       // Не закрываем соединение при unmount корневого компонента — но это и не произойдёт

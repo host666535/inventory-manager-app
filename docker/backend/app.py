@@ -468,6 +468,76 @@ def _action_delete_receipt(cur, body):
     _delete_multi(cur, "receipt_lines", "receipt_id", rc_id)
     _delete(cur, "receipts", "id", rc_id)
 
+def _action_delete_receipt_with_revert(cur, body):
+    """Удалить приёмку и откатить её влияние на остатки/операции.
+    Если приёмка была оприходована (status='posted') — уменьшить остатки
+    на складе/локациях и удалить связанные операции оприходования.
+    Принимает либо только receiptId (тогда мы грузим приёмку из БД),
+    либо готовые locationStocks/warehouseStocks/items (если фронт уже пересчитал).
+    """
+    rc_id = body.get("receiptId")
+    if not rc_id:
+        return
+
+    # 1) Если фронт уже прислал готовые остатки — применяем их (самый надёжный путь)
+    for ls in body.get("locationStocks", []):
+        ls_row = _prepare_row("location_stocks", ls)
+        if ls_row: _upsert(cur, "location_stocks", ls_row, TABLE_PKS["location_stocks"])
+    for ws in body.get("warehouseStocks", []):
+        ws_row = _prepare_row("warehouse_stocks", ws)
+        if ws_row: _upsert(cur, "warehouse_stocks", ws_row, TABLE_PKS["warehouse_stocks"])
+    for it in body.get("items", []):
+        it_row = _prepare_row("items", it)
+        if it_row: _upsert(cur, "items", it_row, TABLE_PKS["items"])
+
+    # 2) Даже если фронт остатки не прислал — делаем revert сами по данным из БД
+    if not body.get("locationStocks") and not body.get("warehouseStocks"):
+        # Загружаем приёмку + её строки
+        cur.execute(f"SELECT status, warehouse_id, number FROM {_table('receipts')} WHERE id = %s", (rc_id,))
+        rc_row = cur.fetchone()
+        if rc_row:
+            status, warehouse_id, number = rc_row
+            if status == "posted":
+                cur.execute(
+                    f"SELECT item_id, qty, confirmed_qty, location_id FROM {_table('receipt_lines')} WHERE receipt_id = %s",
+                    (rc_id,),
+                )
+                lines = cur.fetchall()
+                for item_id, qty, confirmed_qty, location_id in lines:
+                    q = confirmed_qty or qty or 0
+                    if q <= 0:
+                        continue
+                    # Уменьшаем warehouse_stocks
+                    if warehouse_id:
+                        cur.execute(
+                            f"UPDATE {_table('warehouse_stocks')} SET quantity = GREATEST(0, quantity - %s) "
+                            f"WHERE item_id = %s AND warehouse_id = %s",
+                            (q, item_id, warehouse_id),
+                        )
+                    # Уменьшаем location_stocks
+                    if location_id:
+                        cur.execute(
+                            f"UPDATE {_table('location_stocks')} SET quantity = GREATEST(0, quantity - %s) "
+                            f"WHERE item_id = %s AND location_id = %s",
+                            (q, item_id, location_id),
+                        )
+                    # Пересчитываем items.quantity = сумма по складам
+                    cur.execute(
+                        f"UPDATE {_table('items')} SET quantity = COALESCE("
+                        f"(SELECT SUM(quantity) FROM {_table('warehouse_stocks')} WHERE item_id = %s), 0) "
+                        f"WHERE id = %s",
+                        (item_id, item_id),
+                    )
+                # Удаляем операции оприходования, связанные с этой приёмкой по маркеру в комменте
+                cur.execute(
+                    f"DELETE FROM {_table('operations')} WHERE comment = %s",
+                    (f"[Оприходование {number}]",),
+                )
+
+    # 3) Удаляем саму приёмку
+    _delete_multi(cur, "receipt_lines", "receipt_id", rc_id)
+    _delete(cur, "receipts", "id", rc_id)
+
 def _action_upsert_tech_doc(cur, body):
     td = body.get("techDoc", {})
     row = _prepare_row("tech_docs", td)
@@ -498,6 +568,7 @@ ACTION_MAP = {
     "upsert_item": _action_upsert_item,
     "delete_item": _action_delete_item,
     "upsert_operation": _action_upsert_operation,
+    "add_operation": _action_upsert_operation,  # алиас (используется в InventoryPage)
     "upsert_category": _action_upsert_category,
     "delete_category": _action_delete_category,
     "upsert_location": _action_upsert_location,
@@ -512,6 +583,7 @@ ACTION_MAP = {
     "delete_work_order": _action_delete_work_order,
     "upsert_receipt": _action_upsert_receipt,
     "delete_receipt": _action_delete_receipt,
+    "delete_receipt_with_revert": _action_delete_receipt_with_revert,
     "upsert_tech_doc": _action_upsert_tech_doc,
     "delete_tech_doc": _action_delete_tech_doc,
     "upsert_location_stock": _action_upsert_location_stock,
