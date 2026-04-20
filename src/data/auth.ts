@@ -12,6 +12,13 @@ export type AuthUser = {
 const TOKEN_KEY = 'stockbase_auth_token';
 
 function resolveAuthApi(): string {
+  const DIRECT_AUTH_URL = 'https://functions.poehali.dev/70970e31-8f51-4890-a143-fc1872d0054b';
+  if (typeof window !== 'undefined') {
+    const proto = window.location.protocol;
+    const host = window.location.hostname;
+    const isCapacitor = proto === 'capacitor:' || proto === 'file:' || host === 'localhost' || host === '';
+    if (isCapacitor) return DIRECT_AUTH_URL;
+  }
   const env = import.meta.env.VITE_API_URL;
   if (env === undefined || env === null) return '/api/auth';
   if (env === '' || env === '/') return '/api/auth';

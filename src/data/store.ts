@@ -384,6 +384,13 @@ const initialState: AppState = {
 const STORAGE_KEY = 'stockbase_v3';
 
 function resolveCrudApi(): string {
+  const DIRECT_CRUD_URL = 'https://functions.poehali.dev/70970e31-8f51-4890-a143-fc1872d0054b';
+  if (typeof window !== 'undefined') {
+    const proto = window.location.protocol;
+    const host = window.location.hostname;
+    const isCapacitor = proto === 'capacitor:' || proto === 'file:' || host === 'localhost' || host === '';
+    if (isCapacitor) return DIRECT_CRUD_URL;
+  }
   const env = import.meta.env.VITE_API_URL;
   if (env === undefined || env === null) return '/api/crud';
   if (env === '' || env === '/') return '/api/crud';
