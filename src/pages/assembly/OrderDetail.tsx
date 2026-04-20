@@ -588,6 +588,46 @@ function HtmlInvoiceView({ html, order, state, onClose }: {
           });
           parent.insertBefore(row, ref);
         });
+      } else if (itemRows.length > 0) {
+        // Fallback: если в шаблоне нет tr[data-bind="itemsRows"], ищем таблицу и добавляем строки
+        const tables = Array.from(doc.querySelectorAll('table'));
+        let mainTable: HTMLTableElement | null = null;
+        let maxCols = 0;
+        for (const t of tables) {
+          const firstRow = t.querySelector('tr');
+          const cols = firstRow ? firstRow.querySelectorAll('td, th').length : 0;
+          if (cols >= maxCols && cols >= 4) {
+            maxCols = cols;
+            mainTable = t as HTMLTableElement;
+          }
+        }
+        if (mainTable) {
+          const tbody = mainTable.querySelector('tbody') || mainTable;
+          const colCount = maxCols || 8;
+          itemRows.forEach((r, i) => {
+            const tr = doc.createElement('tr');
+            const cells = [
+              String(i + 1),
+              r.name,
+              r.unit,
+              r.assetType,
+              r.qtyReq,
+              r.qtyRel,
+              '',
+              '',
+            ].slice(0, colCount);
+            while (cells.length < colCount) cells.push('');
+            cells.forEach(text => {
+              const td = doc.createElement('td');
+              td.textContent = text;
+              td.style.border = '1px solid #000';
+              td.style.padding = '4px 6px';
+              td.style.fontSize = '11px';
+              tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+          });
+        }
       }
 
       doc.querySelectorAll('[data-bind]').forEach(el => {
@@ -630,9 +670,25 @@ function HtmlInvoiceView({ html, order, state, onClose }: {
     } catch { /* noop */ }
   }, []);
 
+  const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
   const handlePrint = () => {
-    const w = window.open('', '_blank');
-    if (!w) return;
+    const f = iframeRef.current;
+
+    // 1) На мобильных / в WebView — печатаем через текущий iframe,
+    //    так как window.open часто блокируется или не может показать диалог печати.
+    if (isMobile && f) {
+      try {
+        const win = f.contentWindow;
+        if (win) {
+          win.focus();
+          win.print();
+          return;
+        }
+      } catch { /* fallback ниже */ }
+    }
+
+    // 2) Десктоп — новая вкладка с полноценным диалогом
     const docTitle = `Накладная ${order.number}`;
     const printHead = `
 <title>${docTitle}</title>
@@ -657,7 +713,6 @@ function HtmlInvoiceView({ html, order, state, onClose }: {
   }
 </style>`;
     let html = filledHtml;
-    // Remove existing title to avoid duplicates
     html = html.replace(/<title>[^<]*<\/title>/i, '');
     if (html.includes('</head>')) {
       html = html.replace('</head>', `${printHead}</head>`);
@@ -666,11 +721,33 @@ function HtmlInvoiceView({ html, order, state, onClose }: {
     } else {
       html = `<!DOCTYPE html><html><head>${printHead}</head><body>${html}</body></html>`;
     }
+
+    const w = window.open('', '_blank');
+    if (!w) {
+      // Если popup заблокирован, печатаем iframe на месте
+      try { f?.contentWindow?.print(); } catch { /* noop */ }
+      return;
+    }
     w.document.open();
     w.document.write(html);
     w.document.close();
     w.document.title = docTitle;
     setTimeout(() => { try { w.document.title = docTitle; } catch { /* noop */ } w.print(); }, 400);
+  };
+
+  const handleDownloadHtml = () => {
+    // Резерв на мобильных: скачать HTML как файл (потом открыть и распечатать)
+    try {
+      const blob = new Blob([filledHtml], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Накладная_${order.number || 'order'}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { /* noop */ }
   };
 
   return (
@@ -686,6 +763,11 @@ function HtmlInvoiceView({ html, order, state, onClose }: {
           <span className="w-12 text-center text-xs text-gray-600 tabular-nums">{Math.round(zoom * 100)}%</span>
           <button className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100" onClick={() => setZoom(z => Math.min(2, +(z + 0.1).toFixed(1)))}>+</button>
         </div>
+        {isMobile && (
+          <Button size="sm" variant="outline" onClick={handleDownloadHtml} className="gap-1.5">
+            <Icon name="Download" size={14} />HTML
+          </Button>
+        )}
         <Button size="sm" onClick={handlePrint} className="gap-1.5">
           <Icon name="Printer" size={14} />Печать
         </Button>
@@ -703,7 +785,7 @@ function HtmlInvoiceView({ html, order, state, onClose }: {
             transform: zoom !== 1 ? `scale(${zoom})` : undefined,
             transformOrigin: 'top left',
           }}
-          sandbox="allow-same-origin allow-scripts"
+          sandbox="allow-same-origin allow-scripts allow-modals allow-popups"
         />
       </div>
     </div>

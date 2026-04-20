@@ -47,29 +47,21 @@ export function useCreateOrderLogic({
     })), [state.partners]);
 
   const itemOptions: AutocompleteOption[] = useMemo(() => {
-    const warehouseItemIds = selectedWarehouseId
-      ? new Set(
-          (state.warehouseStocks || [])
-            .filter(ws => ws.warehouseId === selectedWarehouseId && ws.quantity > 0)
-            .map(ws => ws.itemId)
-        )
-      : null;
-
-    return state.items
-      .filter(item => !warehouseItemIds || warehouseItemIds.has(item.id))
-      .map(item => {
-        const cat = state.categories.find(c => c.id === item.categoryId);
-        const whStock = selectedWarehouseId
-          ? (state.warehouseStocks || []).find(ws => ws.warehouseId === selectedWarehouseId && ws.itemId === item.id)?.quantity ?? 0
-          : getFreeQty(state, item.id);
-        return {
-          id: item.id,
-          label: item.name,
-          sublabel: cat?.name,
-          badge: `${whStock} ${item.unit}`,
-          badgeColor: whStock === 0 ? '#ef4444' : whStock <= item.lowStockThreshold ? '#f59e0b' : '#10b981',
-        };
-      });
+    // Показываем ВСЕ товары, но складской остаток считаем по выбранному складу (если он есть).
+    // Так товары с нулём тоже видны — на случай, если склад "сбился" и нужно выбрать позицию.
+    return state.items.map(item => {
+      const cat = state.categories.find(c => c.id === item.categoryId);
+      const whStock = selectedWarehouseId
+        ? (state.warehouseStocks || []).find(ws => ws.warehouseId === selectedWarehouseId && ws.itemId === item.id)?.quantity ?? 0
+        : getFreeQty(state, item.id);
+      return {
+        id: item.id,
+        label: item.name,
+        sublabel: cat?.name,
+        badge: `${whStock} ${item.unit}`,
+        badgeColor: whStock === 0 ? '#ef4444' : whStock <= item.lowStockThreshold ? '#f59e0b' : '#10b981',
+      };
+    });
   }, [state, selectedWarehouseId]);
 
   const addLine = () => setLines(l => [...l, { id: generateId(), itemId: '', itemLabel: '', qty: '1' }]);

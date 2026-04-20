@@ -644,52 +644,69 @@ export function getWarehouseStock(state: AppState, itemId: string, warehouseId: 
 }
 
 export function syncWarehouseStocksFromLocations(state: AppState): AppState {
-  const locStocks = state.locationStocks || [];
+  const locStocks = (state.locationStocks || []).filter(ls => ls.quantity > 0);
   const locations = state.locations || [];
-  const whStocks = [...(state.warehouseStocks || [])];
+  const prevWhStocks = state.warehouseStocks || [];
 
   const locWhMap: Record<string, string> = {};
   for (const loc of locations) {
     if (loc.warehouseId) locWhMap[loc.id] = loc.warehouseId;
   }
 
+  // Считаем точные суммы по (itemId × warehouseId) исходя из locationStocks
   const locSums: Record<string, number> = {};
   for (const ls of locStocks) {
-    if (ls.quantity <= 0) continue;
     const whId = locWhMap[ls.locationId];
     if (!whId) continue;
     const key = `${ls.itemId}::${whId}`;
     locSums[key] = (locSums[key] || 0) + ls.quantity;
   }
 
-  let changed = false;
-  for (const [key, locSum] of Object.entries(locSums)) {
+  // Полностью пересчитываем warehouseStocks — источник истины это locationStocks.
+  // НО сохраняем существующие записи без локаций (прямые приходы через оприходование
+  // без указания полки), чтобы не обнулять их.
+  const itemsWithLocStocks = new Set<string>();
+  for (const ls of locStocks) {
+    const whId = locWhMap[ls.locationId];
+    if (whId) itemsWithLocStocks.add(`${ls.itemId}::${whId}`);
+  }
+
+  const newWhStocks: WarehouseStock[] = [];
+  // 1. Добавляем суммы из полок
+  for (const [key, sum] of Object.entries(locSums)) {
     const [itemId, warehouseId] = key.split('::');
-    const wsIdx = whStocks.findIndex(ws => ws.itemId === itemId && ws.warehouseId === warehouseId);
-    if (wsIdx >= 0) {
-      if (whStocks[wsIdx].quantity < locSum) {
-        whStocks[wsIdx] = { ...whStocks[wsIdx], quantity: locSum };
-        changed = true;
-      }
-    } else {
-      whStocks.push({ itemId, warehouseId, quantity: locSum });
-      changed = true;
+    newWhStocks.push({ itemId, warehouseId, quantity: sum });
+  }
+  // 2. Сохраняем складские остатки для товаров без полок (прямые склады)
+  for (const ws of prevWhStocks) {
+    const key = `${ws.itemId}::${ws.warehouseId}`;
+    if (!itemsWithLocStocks.has(key) && ws.quantity > 0) {
+      newWhStocks.push({ ...ws });
     }
   }
 
-  if (!changed) return state;
+  // Проверяем — изменилось ли что-то
+  const prevMap = new Map(prevWhStocks.map(ws => [`${ws.itemId}::${ws.warehouseId}`, ws.quantity]));
+  const newMap = new Map(newWhStocks.map(ws => [`${ws.itemId}::${ws.warehouseId}`, ws.quantity]));
+  let changed = prevMap.size !== newMap.size;
+  if (!changed) {
+    for (const [k, v] of prevMap) if (newMap.get(k) !== v) { changed = true; break; }
+  }
 
+  // Пересчитываем item.quantity = сумма по всем складам
   const items = state.items.map(item => {
-    const total = whStocks
+    const total = newWhStocks
       .filter(ws => ws.itemId === item.id)
       .reduce((s, ws) => s + ws.quantity, 0);
-    if (total > 0 && item.quantity !== total) {
+    if (item.quantity !== total) {
+      changed = true;
       return { ...item, quantity: total };
     }
     return item;
   });
 
-  return { ...state, warehouseStocks: whStocks, items };
+  if (!changed) return state;
+  return { ...state, warehouseStocks: newWhStocks, items };
 }
 
 export function updateWarehouseStock(state: AppState, itemId: string, warehouseId: string, delta: number): AppState {
