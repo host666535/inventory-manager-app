@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { AppState, getInitialEmptyState, loadStateFromServer, setCrudErrorHandler } from '@/data/store';
+import { AppState, getInitialEmptyState, loadStateFromServer, setCrudErrorHandler, checkServerUpdate } from '@/data/store';
 import { toast } from 'sonner';
 import Layout, { Page } from '@/components/Layout';
 import CatalogPage from '@/pages/CatalogPage';
@@ -119,13 +119,27 @@ export default function App() {
     }
   }, []);
 
+  // Хранит последний известный updatedAt сервера.
+  // Используется для polling-сравнения: если сервер вернул более свежий —
+  // значит данные изменились и нужно перезагрузить состояние.
+  const lastUpdatedRef = useRef<string>('');
+  // Защита от одновременных перезагрузок (если polling и WS сработали разом).
+  const reloadingRef = useRef<boolean>(false);
+
   // Единственный путь получения данных — загрузка целиком с сервера.
-  // Используется при первом старте и при каждом WS-сигнале «state_changed».
+  // Используется при первом старте, при WS-сигнале и при polling-проверке.
   const reloadFromServer = useCallback(async (): Promise<boolean> => {
-    const result = await loadStateFromServer();
-    if (!result) return false;
-    setState(result.state);
-    return true;
+    if (reloadingRef.current) return true;
+    reloadingRef.current = true;
+    try {
+      const result = await loadStateFromServer();
+      if (!result) return false;
+      setState(result.state);
+      lastUpdatedRef.current = result.updatedAt || '';
+      return true;
+    } finally {
+      reloadingRef.current = false;
+    }
   }, []);
 
   // Первая загрузка — обязательна, иначе показываем экран «Нет подключения».
@@ -161,6 +175,52 @@ export default function App() {
       if (debounceTimer) clearTimeout(debounceTimer);
       offMsg();
       offStatus();
+    };
+  }, [reloadFromServer]);
+
+  // ─── Polling-синхронизация: главный механизм real-time ─────────────────
+  // Каждые 2 секунды дёргаем лёгкий /api/crud?action=check (без БД, мгновенно).
+  // Если сервер вернул более свежий updatedAt — перезагружаем все данные.
+  // Работает поверх WebSocket: даже если WS отвалился, изменения дойдут.
+  // Polling приостанавливается когда вкладка скрыта (экономия трафика),
+  // и сразу делает форс-проверку при возврате во вкладку.
+  useEffect(() => {
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = async () => {
+      if (stopped) return;
+      // Не дёргаем сервер если вкладка/окно скрыто (экономим батарею мобильника).
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        timer = setTimeout(tick, 2000);
+        return;
+      }
+      const ts = await checkServerUpdate();
+      if (stopped) return;
+      if (ts && ts !== lastUpdatedRef.current) {
+        await reloadFromServer();
+      }
+      timer = setTimeout(tick, 2000);
+    };
+
+    // Когда вкладка снова становится видимой — сразу проверяем,
+    // не пропустили ли мы изменения пока были в фоне.
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        if (timer) { clearTimeout(timer); timer = null; }
+        tick();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Стартуем первый цикл с небольшой задержкой,
+    // чтобы первый load_all успел проставить lastUpdatedRef.
+    timer = setTimeout(tick, 2000);
+
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [reloadFromServer]);
 

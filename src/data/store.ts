@@ -418,6 +418,22 @@ export async function loadStateFromServer(): Promise<{ state: AppState; updatedA
   }
 }
 
+/** Лёгкий пинг — узнаёт у сервера timestamp последнего изменения данных.
+ *  Используется для polling-синхронизации: фронт регулярно (раз в 2 сек)
+ *  спрашивает сервер «что-нибудь поменялось?», и если updatedAt новее —
+ *  перезагружает состояние через loadStateFromServer().
+ *  Возвращает строку ISO timestamp или null при ошибке сети. */
+export async function checkServerUpdate(): Promise<string | null> {
+  try {
+    const res = await fetch(`${CRUD_API}?action=check`, { headers: authHeaders() });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return typeof json.updatedAt === 'string' ? json.updatedAt : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Полная перезапись серверного состояния — только для редких операций
  *  типа «восстановление из резервной копии» или «очистить все данные». */
 export async function saveStateToServer(state: AppState): Promise<boolean> {

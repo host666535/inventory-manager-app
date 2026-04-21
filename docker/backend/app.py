@@ -23,6 +23,21 @@ CORS(app)
 SCHEMA = os.environ.get("DB_SCHEMA", "public")
 WS_BROADCAST_URL = os.environ.get("WS_BROADCAST_URL", "").strip()
 
+# Глобальный маркер последнего изменения данных.
+# Обновляется при каждом успешном POST /api/crud.
+# Фронт регулярно опрашивает /api/crud?action=check и сравнивает.
+LAST_UPDATE_TS = datetime.now(timezone.utc).isoformat()
+LAST_UPDATE_LOCK = threading.Lock()
+
+def _bump_last_update(ts: str) -> None:
+    global LAST_UPDATE_TS
+    with LAST_UPDATE_LOCK:
+        LAST_UPDATE_TS = ts
+
+def _get_last_update() -> str:
+    with LAST_UPDATE_LOCK:
+        return LAST_UPDATE_TS
+
 
 def ws_broadcast(action: str, updated_at: str = "", meta: dict | None = None) -> None:
     """Шлёт сигнал "данные изменились" на WS-сервер (fire-and-forget).
@@ -668,16 +683,17 @@ def crud_handler():
         if request.method == "GET":
             action = request.args.get("action", "load_all")
             if action == "check":
-                cur.execute("SELECT NOW()")
-                ts = cur.fetchone()[0]
+                # Лёгкий пинг — возвращает только timestamp последнего изменения данных.
+                # Используется фронтом для polling-синхронизации (каждые 2 сек).
+                # НЕ ходит в БД, отвечает мгновенно.
                 conn.close()
-                return jsonify({"updatedAt": ts.isoformat()})
+                return jsonify({"updatedAt": _get_last_update()})
             state = _load_all(cur)
-            cur.execute("SELECT NOW()")
-            ts = cur.fetchone()[0]
             conn.close()
+            # Возвращаем именно LAST_UPDATE_TS, а не NOW(), чтобы фронт мог
+            # корректно сравнивать со значениями из /api/crud?action=check.
             return app.response_class(
-                response=_json_dumps({"data": state, "updatedAt": ts.isoformat()}),
+                response=_json_dumps({"data": state, "updatedAt": _get_last_update()}),
                 mimetype="application/json"
             )
 
@@ -695,8 +711,10 @@ def crud_handler():
                 cur.execute("SELECT NOW()")
                 ts = cur.fetchone()[0]
                 conn.close()
-                ws_broadcast("save_all", ts.isoformat())
-                return jsonify({"ok": True, "updatedAt": ts.isoformat()})
+                ts_iso = ts.isoformat()
+                _bump_last_update(ts_iso)
+                ws_broadcast("save_all", ts_iso)
+                return jsonify({"ok": True, "updatedAt": ts_iso})
 
             handler_fn = ACTION_MAP.get(action)
             if not handler_fn:
@@ -708,8 +726,10 @@ def crud_handler():
             cur.execute("SELECT NOW()")
             ts = cur.fetchone()[0]
             conn.close()
-            ws_broadcast(action, ts.isoformat())
-            return jsonify({"ok": True, "updatedAt": ts.isoformat()})
+            ts_iso = ts.isoformat()
+            _bump_last_update(ts_iso)
+            ws_broadcast(action, ts_iso)
+            return jsonify({"ok": True, "updatedAt": ts_iso})
 
     except Exception as e:
         conn.rollback()
