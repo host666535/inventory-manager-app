@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import {
-  AppState, crudAction, saveState,
+  AppState, crudAction,
   WorkOrder, OrderItem, OrderStatus,
   getOrderStatusLabel, getOrderStatusColor,
   updateLocationStock, updateWarehouseStock,
@@ -70,7 +70,6 @@ export function OrderDetail({ order, state, onStateChange, onBack }: {
       }),
     };
     onStateChange(next);
-    saveState(next);
     const updatedOrder = next.workOrders.find(o => o.id === order.id);
     if (updatedOrder) {
       crudAction('upsert_work_order', { workOrder: updatedOrder, orderItems: updatedOrder.items });

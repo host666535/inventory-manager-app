@@ -381,9 +381,11 @@ const initialState: AppState = {
   ],
 };
 
-// ─── Storage ──────────────────────────────────────────────────────────────────
-
-const STORAGE_KEY = 'stockbase_v3';
+// ─── Server API (режим «только онлайн») ───────────────────────────────────────
+//
+// В проекте больше нет локального кэша. Всё состояние берётся ТОЛЬКО с сервера,
+// все действия (crudAction) синхронные: ждём ответ сервера и, если он не ОК,
+// бросаем исключение — UI покажет toast и откатит оптимистичное изменение.
 
 function resolveCrudApi(): string {
   const env = import.meta.env.VITE_API_URL;
@@ -404,17 +406,6 @@ function authHeaders(): Record<string, string> {
   return token ? { 'X-Auth-Token': token } : {};
 }
 
-export async function checkServerUpdatedAt(): Promise<string | null> {
-  try {
-    const res = await fetch(`${CRUD_API}?action=check`, { headers: authHeaders() });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.updatedAt ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export async function loadStateFromServer(): Promise<{ state: AppState; updatedAt: string } | null> {
   try {
     const res = await fetch(`${CRUD_API}?action=load_all`, { headers: authHeaders() });
@@ -427,53 +418,70 @@ export async function loadStateFromServer(): Promise<{ state: AppState; updatedA
   }
 }
 
-export async function saveStateToServer(state: AppState): Promise<string | null> {
+/** Полная перезапись серверного состояния — только для редких операций
+ *  типа «восстановление из резервной копии» или «очистить все данные». */
+export async function saveStateToServer(state: AppState): Promise<boolean> {
   try {
     const res = await fetch(CRUD_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ action: 'save_all', data: state }),
     });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.updatedAt ?? null;
-  } catch {
-    return null;
-  }
-}
-
-let lastCrudAt = 0;
-export function getLastCrudAt(): number { return lastCrudAt; }
-export function markLocalChange() { lastCrudAt = Date.now(); }
-
-async function crudFetchOnce(action: string, payload: Record<string, unknown>): Promise<boolean> {
-  try {
-    const body = JSON.stringify({ action, ...payload });
-    const res = await fetch(CRUD_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body,
-    });
-    if (!res.ok) console.error(`[crudAction] ${action} failed (${res.status})`);
     return res.ok;
-  } catch (e) {
-    console.error(`[crudAction] ${action} error:`, e);
+  } catch {
     return false;
   }
 }
 
-export async function crudAction(action: string, payload: Record<string, unknown>): Promise<boolean> {
-  markLocalChange();
-  let ok = await crudFetchOnce(action, payload);
-  let attempts = 0;
-  while (!ok && attempts < 2) {
-    attempts++;
-    await new Promise(r => setTimeout(r, 500 * attempts));
-    markLocalChange();
-    ok = await crudFetchOnce(action, payload);
+const CRUD_TIMEOUT_MS = 12000;
+
+async function crudFetchOnce(action: string, payload: Record<string, unknown>): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CRUD_TIMEOUT_MS);
+  try {
+    const body = JSON.stringify({ action, ...payload });
+    return await fetch(CRUD_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
   }
-  markLocalChange();
-  return ok;
+}
+
+// Колбэк, вызываемый при неудаче crudAction — настраивается один раз из App.tsx
+// и показывает пользователю toast + запускает перезагрузку состояния,
+// чтобы откатить оптимистичное обновление UI.
+type CrudErrorHandler = (action: string, status: number) => void;
+let crudErrorHandler: CrudErrorHandler | null = null;
+export function setCrudErrorHandler(handler: CrudErrorHandler | null): void {
+  crudErrorHandler = handler;
+}
+
+/**
+ * Отправляет действие на сервер. Онлайн-режим: ждём ответа, одна повторная
+ * попытка при ошибке. Возвращает true если всё ок, false при неудаче.
+ * При неудаче вызывается глобальный обработчик (toast + reload).
+ */
+export async function crudAction(action: string, payload: Record<string, unknown>): Promise<boolean> {
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await crudFetchOnce(action, payload);
+      if (res.ok) return true;
+      lastStatus = res.status;
+    } catch {
+      lastStatus = 0;
+    }
+    if (attempt === 0) await new Promise(r => setTimeout(r, 500));
+  }
+  console.error(`[crudAction] ${action} failed (${lastStatus})`);
+  if (crudErrorHandler) {
+    try { crudErrorHandler(action, lastStatus); } catch { /* noop */ }
+  }
+  return false;
 }
 
 export function guardState(p: AppState): AppState {
@@ -551,38 +559,12 @@ export function getEmptyState(preserveUser?: string): AppState {
   };
 }
 
-export function loadState(): AppState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return guardState(JSON.parse(raw) as AppState);
-  } catch (e) {
-    console.warn('Failed to load state, using defaults:', e);
-  }
-  return initialState;
-}
-
-/** Сохранить только в localStorage (без пуша на сервер — для polling). */
-export function saveLocal(state: AppState): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.warn('Failed to save state (storage may be full):', e);
-  }
-}
-
-export function saveState(state: AppState): void {
-  const stamped = { ...state, _savedAt: new Date().toISOString() };
-  saveLocal(stamped);
-  saveStateToServer(state);
-}
-
-/** Очистить локальный кэш состояния приложения. */
-export function clearLocalCache(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch (e) {
-    console.warn('Failed to clear local cache:', e);
-  }
+/**
+ * Начальное «пустое» состояние приложения для первого рендера до ответа сервера.
+ * Все реальные данные приходят только из loadStateFromServer().
+ */
+export function getInitialEmptyState(): AppState {
+  return getEmptyState();
 }
 
 export function generateId(): string {

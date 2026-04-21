@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { AppState, loadState, saveLocal, loadStateFromServer, checkServerUpdatedAt, getLastCrudAt, crudAction } from '@/data/store';
+import { AppState, getInitialEmptyState, loadStateFromServer, setCrudErrorHandler } from '@/data/store';
+import { toast } from 'sonner';
 import Layout, { Page } from '@/components/Layout';
 import CatalogPage from '@/pages/CatalogPage';
 import NomenclaturePage from '@/pages/NomenclaturePage';
@@ -23,11 +24,7 @@ import { AuthContext, AuthUser, apiLogin, apiLogout, apiMe, setToken, getToken, 
 import InstallPWABanner from '@/components/InstallPWABanner';
 import { realtime, RealtimeStatus } from '@/data/realtime';
 import RealtimeIndicator from '@/components/RealtimeIndicator';
-
-// WS — основной канал синхронизации. Polling остаётся как fallback:
-// если WebSocket отвалился (не поднят сервер, прокси режет) — включаем опрос.
-const POLL_INTERVAL_ONLINE = 30000;   // 30 сек — когда WS работает, на случай пропуска сообщения
-const POLL_INTERVAL_OFFLINE = 5000;   // 5 сек — когда WS отвалился, работаем как раньше
+import OfflineOverlay from '@/components/OfflineOverlay';
 
 function parseQRParams() {
   const params = new URLSearchParams(window.location.search);
@@ -98,15 +95,14 @@ export default function App() {
     isAdmin,
   };
 
-  const [state, setState] = useState<AppState>(loadState);
+  const [state, setState] = useState<AppState>(getInitialEmptyState);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [initialLoadFailed, setInitialLoadFailed] = useState(false);
   const [page, setPage] = useState<Page>('catalog');
 
   const [qrItemId, setQrItemId] = useState<string | null>(null);
   const [qrLocationId, setQrLocationId] = useState<string | null>(null);
   const [qrOrderId, setQrOrderId] = useState<string | null>(null);
-
-  const serverUpdatedAtRef = useRef<string | null>(null);
-  const lastLocalSaveRef = useRef<number>(0);
 
   useEffect(() => {
     if (state.darkMode) document.documentElement.classList.add('dark');
@@ -123,170 +119,78 @@ export default function App() {
     }
   }, []);
 
-  const mergeServerState = useCallback((local: AppState, server: AppState): AppState => {
-    const RECENT_LOCAL_WINDOW_MS = 15000;
-    const recentLocalChange = Date.now() - Math.max(lastLocalSaveRef.current, getLastCrudAt()) < RECENT_LOCAL_WINDOW_MS;
-
-    const arrayKeys: (keyof AppState)[] = [
-      'items', 'categories', 'locations', 'operations', 'warehouses',
-      'partners', 'barcodes', 'locationStocks', 'warehouseStocks',
-      'workOrders', 'receipts', 'techDocs', 'invoiceTemplates',
-    ];
-
-    // Ключ уникальности записи (для stocks нет id — используем составной ключ)
-    const keyOf = (tableKey: string, obj: Record<string, unknown>): string => {
-      if (tableKey === 'locationStocks') return `${obj.itemId}::${obj.locationId}`;
-      if (tableKey === 'warehouseStocks') return `${obj.itemId}::${obj.warehouseId}`;
-      return (obj.id as string) || '';
-    };
-
-    // Смёрдж массива сущностей с учётом локальных удалений/добавлений
-    const mergeArray = (
-      tableKey: string,
-      loc: Array<Record<string, unknown>>,
-      srv: Array<Record<string, unknown>>,
-    ) => {
-      const locMap = new Map(loc.map(x => [keyOf(tableKey, x), x]));
-      const srvMap = new Map(srv.map(x => [keyOf(tableKey, x), x]));
-
-      // Если недавно были локальные изменения — доверяем локальному состоянию:
-      // • элементы, которых нет локально, но есть на сервере = удалены локально → НЕ возвращаем
-      // • элементы, которых нет на сервере, но есть локально = добавлены локально → оставляем
-      // • общие элементы — берём с сервера (он был обновлён нашим upsert)
-      if (recentLocalChange) {
-        const result: Array<Record<string, unknown>> = [];
-        // Идём по локальному (сохраняем порядок)
-        for (const [k, lObj] of locMap) {
-          const sObj = srvMap.get(k);
-          result.push(sObj || lObj);
-        }
-        // Добавляем новое с сервера (от других устройств), которого локально не было
-        // — только если это НЕ удаление (у нас этих ID локально нет вовсе).
-        // Но если запись исчезла локально именно сейчас — она не должна вернуться.
-        // Компромисс: при recentLocalChange мы НЕ добавляем серверные записи,
-        // которых нет локально — иначе удаление вернёт их обратно.
-        return result;
-      }
-
-      // Нет свежих локальных изменений — полностью принимаем сервер как источник истины
-      return srv;
-    };
-
-    const merged: AppState = { ...local, ...server };
-    for (const k of arrayKeys) {
-      const srv = (server[k] as Array<Record<string, unknown>>) || [];
-      const loc = (local[k] as Array<Record<string, unknown>>) || [];
-
-      // Если сервер пуст, а локально есть данные и были недавние изменения —
-      // оставляем локальные (сервер ещё не успел применить)
-      if ((!srv || srv.length === 0) && loc.length > 0 && recentLocalChange) {
-        (merged as Record<string, unknown>)[k as string] = loc;
-        continue;
-      }
-
-      (merged as Record<string, unknown>)[k as string] = mergeArray(k as string, loc, srv);
-    }
-    return merged;
+  // Единственный путь получения данных — загрузка целиком с сервера.
+  // Используется при первом старте и при каждом WS-сигнале «state_changed».
+  const reloadFromServer = useCallback(async (): Promise<boolean> => {
+    const result = await loadStateFromServer();
+    if (!result) return false;
+    setState(result.state);
+    return true;
   }, []);
 
+  // Первая загрузка — обязательна, иначе показываем экран «Нет подключения».
   useEffect(() => {
-    loadStateFromServer().then(result => {
-      if (!result) return;
-      const localRaw = localStorage.getItem('stockbase_state');
-      const localTs = localRaw ? (JSON.parse(localRaw)._savedAt || '') : '';
-      const serverTs = result.updatedAt || '';
-      if (localTs && serverTs && localTs > serverTs) {
-        serverUpdatedAtRef.current = serverTs;
-        return;
-      }
-      serverUpdatedAtRef.current = result.updatedAt;
-      setState(prev => {
-        const merged = mergeServerState(prev, result.state);
-        saveLocal(merged);
-        const srvWh = result.state.warehouses || [];
-        const locWh = prev.warehouses || [];
-        if (srvWh.length === 0 && locWh.length > 0) {
-          locWh.forEach(w => { crudAction('upsert_warehouse', { warehouse: w }); });
-        }
-        const srvCats = result.state.categories || [];
-        const locCats = prev.categories || [];
-        if (srvCats.length === 0 && locCats.length > 0) {
-          locCats.forEach(c => { crudAction('upsert_category', { category: c }); });
-        }
-        const srvLocs = result.state.locations || [];
-        const locLocs = prev.locations || [];
-        if (srvLocs.length === 0 && locLocs.length > 0) {
-          locLocs.forEach(l => { crudAction('upsert_location', { location: l }); });
-        }
-        const srvItems = result.state.items || [];
-        const locItems = prev.items || [];
-        if (srvItems.length === 0 && locItems.length > 0) {
-          locItems.forEach(i => { crudAction('upsert_item', { item: i }); });
-        }
-        return merged;
-      });
-    });
-  }, [mergeServerState]);
+    let cancelled = false;
+    (async () => {
+      const ok = await reloadFromServer();
+      if (cancelled) return;
+      setInitialLoading(false);
+      setInitialLoadFailed(!ok);
+    })();
+    return () => { cancelled = true; };
+  }, [reloadFromServer]);
 
-  // Единая функция загрузки актуального состояния с сервера и мерджа в локальное.
-  // Используется и WS-сигналом (мгновенно), и polling-fallback.
-  // Параметр `skipQuietCheck` — для WS-сигналов: они приходят от ЧУЖИХ изменений,
-  // и ждать тишины после своего локального сохранения тут не нужно —
-  // merge-функция сама защитит локальные правки через recentLocalChange.
-  const pullAndMerge = useCallback(async (opts?: { skipQuietCheck?: boolean }) => {
-    const QUIET_WINDOW_MS = 15000;
-    const skip = opts?.skipQuietCheck === true;
-    if (!skip) {
-      const lastChange = Math.max(lastLocalSaveRef.current, getLastCrudAt());
-      if (Date.now() - lastChange < QUIET_WINDOW_MS) return;
-      const remoteTs = await checkServerUpdatedAt();
-      if (!remoteTs) return;
-      if (remoteTs === serverUpdatedAtRef.current) return;
-    }
-    const result = await loadStateFromServer();
-    if (!result) return;
-    serverUpdatedAtRef.current = result.updatedAt;
-    setState(prev => {
-      const merged = mergeServerState(prev, result.state);
-      saveLocal(merged);
-      return merged;
-    });
-  }, [mergeServerState]);
-
-  // ─── Realtime: WebSocket (главный канал) + polling (fallback) ───
+  // ─── Realtime: WebSocket — единственный способ узнать про изменения ───
   const [wsStatus, setWsStatus] = useState<RealtimeStatus>('connecting');
 
   useEffect(() => {
-    // Подписка на сигналы от сервера: кто-то сохранил изменение — подтянуть свежее состояние.
-    // Небольшой дебаунс, чтобы серия событий (напр. целая заявка) тянулась одним load_all.
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const offMsg = realtime.onMessage((msg) => {
       if (msg.type !== 'state_changed') return;
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        pullAndMerge({ skipQuietCheck: true });
-      }, 150);
+      debounceTimer = setTimeout(() => { reloadFromServer(); }, 150);
     });
-    const offStatus = realtime.onStatus(setWsStatus);
+    const offStatus = realtime.onStatus((s) => {
+      setWsStatus(s);
+      // Когда WS восстановился — сразу подтягиваем актуальное состояние,
+      // чтобы компенсировать пропущенные пока были офлайн.
+      if (s === 'online') reloadFromServer();
+    });
     realtime.connect();
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       offMsg();
       offStatus();
-      // Не закрываем соединение при unmount корневого компонента — но это и не произойдёт
-      // в нормальной работе. На всякий случай оставляем WS живым.
     };
-  }, [pullAndMerge]);
+  }, [reloadFromServer]);
 
+  // Глобальная реакция на ошибку crudAction:
+  // показываем toast и откатываем оптимистичное обновление через reload.
   useEffect(() => {
-    // Polling-fallback. Интервал меняется в зависимости от статуса WS.
-    const interval = wsStatus === 'online' ? POLL_INTERVAL_ONLINE : POLL_INTERVAL_OFFLINE;
-    const id = setInterval(() => { pullAndMerge(); }, interval);
-    return () => clearInterval(id);
-  }, [pullAndMerge, wsStatus]);
+    setCrudErrorHandler((action, status) => {
+      const reason = status === 0 ? 'нет связи с сервером' : `код ${status}`;
+      toast.error(`Не удалось сохранить изменение (${reason})`, {
+        description: `Действие «${action}» отклонено сервером. Данные возвращены к последнему успешному состоянию.`,
+      });
+      reloadFromServer();
+    });
+    return () => setCrudErrorHandler(null);
+  }, [reloadFromServer]);
+
+  // Ручная попытка переподключения из оверлея «Нет подключения».
+  const handleRetryConnection = useCallback(async () => {
+    setInitialLoadFailed(false);
+    setInitialLoading(true);
+    const ok = await reloadFromServer();
+    setInitialLoading(false);
+    setInitialLoadFailed(!ok);
+    if (!ok) realtime.connect();
+  }, [reloadFromServer]);
 
   const handleStateChange = useCallback((s: AppState) => {
-    lastLocalSaveRef.current = Date.now();
+    // Оптимистичное локальное обновление — чтобы UI реагировал мгновенно.
+    // Реальным источником истины остаётся сервер: WS-сигнал после успешного
+    // crudAction тут же подтянет свежее состояние и заменит этот снимок.
     setState(s);
   }, []);
 
@@ -322,6 +226,27 @@ export default function App() {
     );
   }
 
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/30">
+        <div className="text-muted-foreground text-sm">Загрузка данных…</div>
+      </div>
+    );
+  }
+
+  if (initialLoadFailed) {
+    return (
+      <OfflineOverlay
+        variant="full"
+        onRetry={handleRetryConnection}
+      />
+    );
+  }
+
+  // Считаем «нет связи», если WS офлайн. Пока WS переподключается (connecting)
+  // — пользователя не блокируем, показываем только индикатор.
+  const wsDisconnected = wsStatus === 'offline';
+
   return (
     <AuthContext.Provider value={authCtx}>
       <TooltipProvider>
@@ -350,6 +275,9 @@ export default function App() {
           {page === 'settings'     && <SettingsPage state={state} onStateChange={handleStateChange} />}
         </Layout>
         <RealtimeIndicator status={wsStatus} />
+        {wsDisconnected && (
+          <OfflineOverlay variant="banner" onRetry={handleRetryConnection} />
+        )}
         <InstallPWABanner />
       </TooltipProvider>
     </AuthContext.Provider>

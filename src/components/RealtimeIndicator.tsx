@@ -6,7 +6,7 @@ import { RealtimeStatus } from '@/data/realtime';
  * Маленький индикатор статуса realtime-соединения в правом нижнем углу.
  * Зелёный — WebSocket подключён, изменения приходят мгновенно.
  * Жёлтый — переподключение.
- * Серый — оффлайн, работаем через polling-fallback.
+ * Серый — нет связи, действия заблокированы.
  */
 export default function RealtimeIndicator({ status }: { status: RealtimeStatus }) {
   const [expanded, setExpanded] = useState(false);
@@ -26,7 +26,7 @@ export default function RealtimeIndicator({ status }: { status: RealtimeStatus }
   const label =
     status === 'online' ? 'Подключено' :
     status === 'connecting' ? 'Подключение...' :
-    'Офлайн (опрос раз в 5 сек)';
+    'Нет связи';
 
   const iconName =
     status === 'online' ? 'Wifi' :

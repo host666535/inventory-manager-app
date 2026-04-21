@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Icon from '@/components/ui/icon';
-import { AppState, crudAction, getEmptyState, saveState, guardState, loadStateFromServer, saveLocal, clearLocalCache } from '@/data/store';
+import { AppState, crudAction, getEmptyState, guardState, loadStateFromServer, saveStateToServer } from '@/data/store';
 import { toast } from 'sonner';
 import { useAuth } from '@/data/auth';
 import { ProfileSection, AlertsSection, TelegramSection } from './settings/ProfileSections';
@@ -33,12 +33,10 @@ export default function SettingsPage({ state, onStateChange }: Props) {
         toast.error('Не удалось загрузить данные с сервера. Проверьте соединение.');
         return;
       }
-      clearLocalCache();
-      saveLocal(result.state);
       onStateChange(result.state);
       setUserName(result.state.currentUser);
       setThreshold(String(result.state.defaultLowStockThreshold));
-      toast.success('Данные успешно синхронизированы с сервером');
+      toast.success('Данные обновлены с сервера');
     } catch {
       toast.error('Ошибка синхронизации');
     } finally {
@@ -206,10 +204,16 @@ export default function SettingsPage({ state, onStateChange }: Props) {
                               setTimeout(() => setImportStatus('idle'), 3000);
                               return;
                             }
-                            handleDeleteConfirm('текущие данные и заменить их на данные из резервной копии', () => {
+                            handleDeleteConfirm('текущие данные и заменить их на данные из резервной копии', async () => {
                               const restored = guardState(parsed as AppState);
                               onStateChange(restored);
-                              saveState(restored);
+                              const ok = await saveStateToServer(restored);
+                              if (!ok) {
+                                toast.error('Не удалось сохранить данные на сервере');
+                                setImportStatus('error');
+                                setTimeout(() => setImportStatus('idle'), 3000);
+                                return;
+                              }
                               setUserName(restored.currentUser);
                               setThreshold(String(restored.defaultLowStockThreshold));
                               setImportStatus('success');
@@ -260,7 +264,7 @@ export default function SettingsPage({ state, onStateChange }: Props) {
                   <Button
                     variant="outline"
                     className="justify-start border-warning/40 text-warning hover:bg-warning/10"
-                    onClick={() => handleDeleteConfirm('историю, приходы, расходы, документы и остатки (номенклатура сохранится)', () => {
+                    onClick={() => handleDeleteConfirm('историю, приходы, расходы, документы и остатки (номенклатура сохранится)', async () => {
                       const next: AppState = {
                         ...state,
                         operations: [],
@@ -275,7 +279,8 @@ export default function SettingsPage({ state, onStateChange }: Props) {
                         warehouseStocks: [],
                       };
                       onStateChange(next);
-                      saveState(next);
+                      const ok = await saveStateToServer(next);
+                      if (!ok) toast.error('Не удалось сохранить на сервере');
                     })}
                   >
                     <Icon name="Eraser" size={14} className="mr-1.5" />
@@ -284,11 +289,15 @@ export default function SettingsPage({ state, onStateChange }: Props) {
                   <Button
                     variant="destructive"
                     className="justify-start"
-                    onClick={() => handleDeleteConfirm('все данные приложения', () => {
+                    onClick={() => handleDeleteConfirm('все данные приложения', async () => {
                       const empty = getEmptyState(state.currentUser);
                       empty.darkMode = state.darkMode;
                       onStateChange(empty);
-                      saveState(empty);
+                      const ok = await saveStateToServer(empty);
+                      if (!ok) {
+                        toast.error('Не удалось очистить данные на сервере');
+                        return;
+                      }
                       setUserName(empty.currentUser);
                       setThreshold(String(empty.defaultLowStockThreshold));
                     })}
