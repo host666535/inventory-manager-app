@@ -501,23 +501,23 @@ export async function crudAction(action: string, payload: Record<string, unknown
 }
 
 export function guardState(p: AppState): AppState {
-  if (!Array.isArray(p.items))          p.items = initialState.items;
-  if (!Array.isArray(p.categories))     p.categories = initialState.categories;
-  if (!Array.isArray(p.locations))      p.locations = initialState.locations;
+  if (!Array.isArray(p.items))          p.items = [];
+  if (!Array.isArray(p.categories))     p.categories = [];
+  if (!Array.isArray(p.locations))      p.locations = [];
   if (!Array.isArray(p.operations))     p.operations = [];
-  if (!Array.isArray(p.locationStocks)) p.locationStocks = initialState.locationStocks;
+  if (!Array.isArray(p.locationStocks)) p.locationStocks = [];
   if (!Array.isArray(p.workOrders))     p.workOrders = [];
-  if (!Array.isArray(p.partners))       p.partners = initialState.partners;
+  if (!Array.isArray(p.partners))       p.partners = [];
   if (!Array.isArray(p.receipts))       p.receipts = [];
-  if (p.orderCounter === undefined)     p.orderCounter = initialState.orderCounter;
+  if (p.orderCounter === undefined)     p.orderCounter = 1;
   if (p.receiptCounter === undefined)   p.receiptCounter = 1;
   if (!Array.isArray(p.techDocs))       p.techDocs = [];
   if (p.taskCounter === undefined)      p.taskCounter = 1;
-  if (!p.currentUser)                   p.currentUser = initialState.currentUser;
-  if (p.defaultLowStockThreshold === undefined) p.defaultLowStockThreshold = initialState.defaultLowStockThreshold;
+  if (!p.currentUser)                   p.currentUser = 'Администратор';
+  if (p.defaultLowStockThreshold === undefined) p.defaultLowStockThreshold = 5;
   if (typeof p.darkMode !== 'boolean')  p.darkMode = false;
-  if (!Array.isArray(p.warehouses))     p.warehouses = initialState.warehouses;
-  if (!Array.isArray(p.warehouseStocks)) p.warehouseStocks = initialState.warehouseStocks;
+  if (!Array.isArray(p.warehouses))     p.warehouses = [];
+  if (!Array.isArray(p.warehouseStocks)) p.warehouseStocks = [];
   if (!Array.isArray(p.barcodes))       p.barcodes = [];
   if (!Array.isArray(p.invoiceTemplates)) p.invoiceTemplates = [];
   if (Array.isArray(p.locations) && Array.isArray(p.warehouses) && p.warehouses.length > 0) {
