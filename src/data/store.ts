@@ -387,19 +387,11 @@ const initialState: AppState = {
 // все действия (crudAction) синхронные: ждём ответ сервера и, если он не ОК,
 // бросаем исключение — UI покажет toast и откатит оптимистичное изменение.
 
-function resolveCrudApi(): string {
-  const env = import.meta.env.VITE_API_URL;
-  if (typeof window !== 'undefined') {
-    const proto = window.location.protocol;
-    const host = window.location.hostname;
-    const isCapacitor = proto === 'capacitor:' || proto === 'file:' || host === 'localhost' || host === '';
-    if (isCapacitor && env) return `${env}/api/crud`;
-  }
-  if (env === undefined || env === null) return '/api/crud';
-  if (env === '' || env === '/') return '/api/crud';
-  return `${env}/api/crud`;
+import { buildApiUrl } from './serverConfig';
+
+function crudApi(): string {
+  return buildApiUrl('/api/crud');
 }
-const CRUD_API = resolveCrudApi();
 
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem('stockbase_auth_token');
@@ -408,7 +400,7 @@ function authHeaders(): Record<string, string> {
 
 export async function loadStateFromServer(): Promise<{ state: AppState; updatedAt: string } | null> {
   try {
-    const res = await fetch(`${CRUD_API}?action=load_all`, { headers: authHeaders() });
+    const res = await fetch(`${crudApi()}?action=load_all`, { headers: authHeaders() });
     if (!res.ok) return null;
     const json = await res.json();
     if (!json.data) return null;
@@ -425,7 +417,7 @@ export async function loadStateFromServer(): Promise<{ state: AppState; updatedA
  *  Возвращает строку ISO timestamp или null при ошибке сети. */
 export async function checkServerUpdate(): Promise<string | null> {
   try {
-    const res = await fetch(`${CRUD_API}?action=check`, { headers: authHeaders() });
+    const res = await fetch(`${crudApi()}?action=check`, { headers: authHeaders() });
     if (!res.ok) return null;
     const json = await res.json();
     return typeof json.updatedAt === 'string' ? json.updatedAt : null;
@@ -438,7 +430,7 @@ export async function checkServerUpdate(): Promise<string | null> {
  *  типа «восстановление из резервной копии» или «очистить все данные». */
 export async function saveStateToServer(state: AppState): Promise<boolean> {
   try {
-    const res = await fetch(CRUD_API, {
+    const res = await fetch(crudApi(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ action: 'save_all', data: state }),
@@ -456,7 +448,7 @@ async function crudFetchOnce(action: string, payload: Record<string, unknown>): 
   const timer = setTimeout(() => controller.abort(), CRUD_TIMEOUT_MS);
   try {
     const body = JSON.stringify({ action, ...payload });
-    return await fetch(CRUD_API, {
+    return await fetch(crudApi(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body,

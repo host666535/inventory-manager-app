@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import { buildApiUrl } from './serverConfig';
 
 export type UserRole = 'admin' | 'warehouse' | 'viewer';
 
@@ -11,19 +12,9 @@ export type AuthUser = {
 
 const TOKEN_KEY = 'stockbase_auth_token';
 
-function resolveAuthApi(): string {
-  const env = import.meta.env.VITE_API_URL;
-  if (typeof window !== 'undefined') {
-    const proto = window.location.protocol;
-    const host = window.location.hostname;
-    const isCapacitor = proto === 'capacitor:' || proto === 'file:' || host === 'localhost' || host === '';
-    if (isCapacitor && env) return `${env}/api/auth`;
-  }
-  if (env === undefined || env === null) return '/api/auth';
-  if (env === '' || env === '/') return '/api/auth';
-  return `${env}/api/auth`;
+function authApi(): string {
+  return buildApiUrl('/api/auth');
 }
-const AUTH_API = resolveAuthApi();
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -39,7 +30,7 @@ export function clearToken(): void {
 
 export async function apiLogin(username: string, password: string): Promise<{ token: string; user: AuthUser } | { error: string }> {
   try {
-    const res = await fetch(AUTH_API, {
+    const res = await fetch(authApi(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'login', username, password }),
@@ -56,7 +47,7 @@ export async function apiMe(): Promise<AuthUser | null> {
   const token = getToken();
   if (!token) return null;
   try {
-    const res = await fetch(`${AUTH_API}?action=me`, {
+    const res = await fetch(`${authApi()}?action=me`, {
       headers: { 'X-Auth-Token': token },
     });
     if (!res.ok) return null;
@@ -70,7 +61,7 @@ export async function apiMe(): Promise<AuthUser | null> {
 export async function apiLogout(): Promise<void> {
   const token = getToken();
   if (token) {
-    fetch(AUTH_API, {
+    fetch(authApi(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
       body: JSON.stringify({ action: 'logout' }),
@@ -83,7 +74,7 @@ export async function apiListUsers(): Promise<AuthUser[]> {
   const token = getToken();
   if (!token) return [];
   try {
-    const res = await fetch(`${AUTH_API}?action=list_users`, {
+    const res = await fetch(`${authApi()}?action=list_users`, {
       headers: { 'X-Auth-Token': token },
     });
     if (!res.ok) return [];
@@ -97,7 +88,7 @@ export async function apiListUsers(): Promise<AuthUser[]> {
 export async function apiRegister(data: { username: string; password: string; displayName: string; role: UserRole }): Promise<{ user?: AuthUser; error?: string }> {
   const token = getToken();
   try {
-    const res = await fetch(AUTH_API, {
+    const res = await fetch(authApi(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' },
       body: JSON.stringify({ action: 'register', ...data }),
@@ -113,7 +104,7 @@ export async function apiRegister(data: { username: string; password: string; di
 export async function apiChangePassword(userId: string, newPassword: string): Promise<{ error?: string }> {
   const token = getToken();
   try {
-    const res = await fetch(AUTH_API, {
+    const res = await fetch(authApi(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' },
       body: JSON.stringify({ action: 'change_password', userId, newPassword }),
@@ -128,7 +119,7 @@ export async function apiChangePassword(userId: string, newPassword: string): Pr
 export async function apiUpdateUser(userId: string, data: Partial<{ displayName: string; role: UserRole; isActive: boolean }>): Promise<{ error?: string }> {
   const token = getToken();
   try {
-    const res = await fetch(AUTH_API, {
+    const res = await fetch(authApi(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' },
       body: JSON.stringify({ action: 'update_user', userId, ...data }),
@@ -143,7 +134,7 @@ export async function apiUpdateUser(userId: string, data: Partial<{ displayName:
 export async function apiDeleteUser(userId: string): Promise<{ error?: string }> {
   const token = getToken();
   try {
-    const res = await fetch(AUTH_API, {
+    const res = await fetch(authApi(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token || '' },
       body: JSON.stringify({ action: 'delete_user', userId }),

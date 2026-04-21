@@ -25,6 +25,8 @@ import InstallPWABanner from '@/components/InstallPWABanner';
 import { realtime, RealtimeStatus } from '@/data/realtime';
 import RealtimeIndicator from '@/components/RealtimeIndicator';
 import OfflineOverlay from '@/components/OfflineOverlay';
+import ServerSetupScreen from '@/components/ServerSetupScreen';
+import { needsServerSetup, clearServerUrl } from '@/data/serverConfig';
 
 function parseQRParams() {
   const params = new URLSearchParams(window.location.search);
@@ -48,6 +50,17 @@ const GUEST_USER: AuthUser = {
 export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(AUTH_DISABLED ? GUEST_USER : null);
   const [authLoading, setAuthLoading] = useState(!AUTH_DISABLED);
+  const [serverSetupNeeded, setServerSetupNeeded] = useState(needsServerSetup());
+
+  const handleServerConnected = useCallback(() => {
+    setServerSetupNeeded(false);
+    window.location.reload();
+  }, []);
+
+  const handleServerReset = useCallback(() => {
+    clearServerUrl();
+    setServerSetupNeeded(true);
+  }, []);
 
   useEffect(() => {
     if (AUTH_DISABLED) return;
@@ -267,6 +280,15 @@ export default function App() {
     if (p !== 'assembly')  setQrOrderId(null);
   };
 
+  if (serverSetupNeeded) {
+    return (
+      <TooltipProvider>
+        <Toaster position="top-right" />
+        <ServerSetupScreen onConnected={handleServerConnected} />
+      </TooltipProvider>
+    );
+  }
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30">
@@ -299,6 +321,7 @@ export default function App() {
       <OfflineOverlay
         variant="full"
         onRetry={handleRetryConnection}
+        onChangeServer={handleServerReset}
       />
     );
   }

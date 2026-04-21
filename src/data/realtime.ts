@@ -30,31 +30,10 @@ type StatusListener = (status: RealtimeStatus) => void;
 const MAX_RECONNECT_DELAY = 30000; // 30 сек
 const HEARTBEAT_INTERVAL = 20000; // 20 сек
 
+import { buildWsUrl } from './serverConfig';
+
 function resolveWsUrl(): string {
-  // Для Capacitor / локальной разработки — смотрим VITE_API_URL
-  const env = (import.meta as unknown as { env: { VITE_API_URL?: string } }).env?.VITE_API_URL;
-  if (typeof window === 'undefined') return '';
-
-  const proto = window.location.protocol;
-  const host = window.location.host;
-  const hostname = window.location.hostname;
-
-  const isCapacitor = proto === 'capacitor:' || proto === 'file:' || hostname === 'localhost' || hostname === '';
-
-  // Если задан явный API_URL — строим ws:// от него
-  if (isCapacitor && env) {
-    try {
-      const u = new URL(env);
-      const wsProto = u.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${wsProto}//${u.host}/ws`;
-    } catch {
-      /* fallthrough */
-    }
-  }
-
-  // Обычный случай: ws(s)://<текущий host>/ws
-  const wsProto = proto === 'https:' ? 'wss:' : 'ws:';
-  return `${wsProto}//${host}/ws`;
+  return buildWsUrl();
 }
 
 class RealtimeClient {

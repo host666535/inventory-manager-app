@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
+import { isMobileApp, getSavedServerUrl } from '@/data/serverConfig';
 
 /**
  * Оверлей «Нет подключения».
@@ -13,10 +14,13 @@ import Icon from '@/components/ui/icon';
 export default function OfflineOverlay({
   variant,
   onRetry,
+  onChangeServer,
 }: {
   variant: 'full' | 'banner';
   onRetry: () => void | Promise<void>;
+  onChangeServer?: () => void;
 }) {
+  const showChangeServer = isMobileApp() && !!getSavedServerUrl() && !!onChangeServer;
   const [retrying, setRetrying] = useState(false);
 
   const handleRetry = async () => {
@@ -50,6 +54,12 @@ export default function OfflineOverlay({
             />
             {retrying ? 'Подключение…' : 'Попробовать снова'}
           </Button>
+          {showChangeServer && (
+            <Button onClick={onChangeServer} variant="outline" className="w-full">
+              <Icon name="Server" size={15} className="mr-1.5" />
+              Сменить адрес сервера
+            </Button>
+          )}
         </div>
       </div>
     );

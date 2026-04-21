@@ -8,6 +8,8 @@ import { useAuth } from '@/data/auth';
 import { ProfileSection, AlertsSection, TelegramSection } from './settings/ProfileSections';
 import { WarehousesSection, CategoriesSection, LocationsSection } from './settings/EntitySections';
 import UsersSection from './settings/UsersSection';
+import ServerQRDialog from '@/components/ServerQRDialog';
+import { isMobileApp, getSavedServerUrl, clearServerUrl } from '@/data/serverConfig';
 
 type Props = {
   state: AppState;
@@ -23,6 +25,9 @@ export default function SettingsPage({ state, onStateChange }: Props) {
   const [deleteConfirm, setDeleteConfirm] = useState<{ label: string; onConfirm: () => void } | null>(null);
   const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [syncing, setSyncing] = useState(false);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const mobileApp = isMobileApp();
+  const savedServer = getSavedServerUrl();
 
   const handleForceSync = async () => {
     if (syncing) return;
@@ -156,6 +161,46 @@ export default function SettingsPage({ state, onStateChange }: Props) {
                     Несохранённые локальные изменения будут заменены данными с сервера. Убедись, что все важные действия уже выполнены.
                   </span>
                 </div>
+              </div>
+
+              <div className="bg-card rounded-xl border border-border shadow-card p-5 space-y-4">
+                <h2 className="font-semibold text-foreground flex items-center gap-2">
+                  <Icon name="Server" size={16} className="text-primary" />
+                  Адрес сервера
+                </h2>
+                {mobileApp && savedServer ? (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Сейчас приложение подключено к серверу <code className="text-foreground bg-muted px-1.5 py-0.5 rounded text-xs">{savedServer}</code>. Если сменился Wi-Fi или IP сервера — задай новый адрес.
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="justify-start"
+                      onClick={() => {
+                        clearServerUrl();
+                        toast.success('Адрес сервера сброшен. Сейчас откроется экран настройки.');
+                        setTimeout(() => window.location.reload(), 800);
+                      }}
+                    >
+                      <Icon name="Plug" size={14} className="mr-1.5" />
+                      Сменить адрес сервера
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Покажи QR-код, чтобы быстро подключить мобильное приложение к этому серверу. Сотрудник наводит камеру в приложении — и адрес сохраняется автоматически.
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="justify-start"
+                      onClick={() => setQrDialogOpen(true)}
+                    >
+                      <Icon name="QrCode" size={14} className="mr-1.5" />
+                      Показать QR-код для мобильного приложения
+                    </Button>
+                  </>
+                )}
               </div>
 
               <div className="bg-card rounded-xl border border-border shadow-card p-5 space-y-4">
@@ -338,6 +383,7 @@ export default function SettingsPage({ state, onStateChange }: Props) {
           </DialogContent>
         </Dialog>
       )}
+      <ServerQRDialog open={qrDialogOpen} onClose={() => setQrDialogOpen(false)} />
     </div>
   );
 }
