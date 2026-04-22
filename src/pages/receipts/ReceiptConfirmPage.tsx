@@ -29,6 +29,63 @@ function findLineByCode(receipt: Receipt, code: string, state: AppState): ScanRe
 
 type NotifType = 'success' | 'error' | null;
 
+/** Инпут количества с локальным стейтом — не заедает при печати.
+ *  Коммитит значение на blur / Enter. Если пользователь стёр поле —
+ *  восстанавливает предыдущее валидное значение. */
+function QtyInput({ value, max, onCommit, className }: {
+  value: number;
+  max: number;
+  onCommit: (n: number) => void;
+  className?: string;
+}) {
+  const [text, setText] = useState(String(value));
+  const lastCommittedRef = useRef(value);
+
+  useEffect(() => {
+    if (value !== lastCommittedRef.current) {
+      setText(String(value));
+      lastCommittedRef.current = value;
+    }
+  }, [value]);
+
+  const commit = () => {
+    const trimmed = text.trim();
+    if (trimmed === '') {
+      setText(String(lastCommittedRef.current));
+      return;
+    }
+    const n = parseInt(trimmed, 10);
+    if (isNaN(n)) {
+      setText(String(lastCommittedRef.current));
+      return;
+    }
+    const clamped = Math.max(0, Math.min(max, n));
+    lastCommittedRef.current = clamped;
+    setText(String(clamped));
+    if (clamped !== value) onCommit(clamped);
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      value={text}
+      onChange={e => setText(e.target.value.replace(/[^0-9]/g, ''))}
+      onBlur={commit}
+      onKeyDown={e => {
+        if (e.key === 'Enter') { e.currentTarget.blur(); }
+        if (e.key === 'Escape') {
+          setText(String(lastCommittedRef.current));
+          e.currentTarget.blur();
+        }
+      }}
+      onFocus={e => e.currentTarget.select()}
+      className={className}
+    />
+  );
+}
+
 export function ReceiptConfirmPage({
   receipt, state, onStateChange, onBack, onPosted,
 }: {
@@ -184,6 +241,11 @@ export function ReceiptConfirmPage({
     }
   }, [liveReceipt, state, onStateChange, totalQty]);
 
+  // Ref на актуальный processCode — чтобы RAF-цикл камеры всегда
+  // вызывал свежую версию, а не замороженную в момент startCamera().
+  const processCodeRef = useRef(processCode);
+  useEffect(() => { processCodeRef.current = processCode; }, [processCode]);
+
   // processCode для inline-сканера конкретной строки
   const processLineCode = useCallback((code: string, method: 'camera' | 'manual', lineId: string) => {
     const now = Date.now();
@@ -258,6 +320,9 @@ export function ReceiptConfirmPage({
     }
   }, [liveReceipt, state, onStateChange, totalQty]);
 
+  const processLineCodeRef = useRef(processLineCode);
+  useEffect(() => { processLineCodeRef.current = processLineCode; }, [processLineCode]);
+
   const startCamera = async () => {
     setCameraError('');
     if (typeof BarcodeDetector === 'undefined') {
@@ -284,7 +349,7 @@ export function ReceiptConfirmPage({
           try {
             const barcodes = await detectorRef.current.detect(videoRef.current);
             for (const b of barcodes) {
-              if (b.rawValue) processCode(b.rawValue, 'camera');
+              if (b.rawValue) processCodeRef.current(b.rawValue, 'camera');
             }
           } catch { /* ignore */ }
         }
@@ -323,7 +388,7 @@ export function ReceiptConfirmPage({
           try {
             const barcodes = await lineDetectorRef.current.detect(lineVideoRef.current);
             for (const b of barcodes) {
-              if (b.rawValue) processLineCode(b.rawValue, 'camera', lineId);
+              if (b.rawValue) processLineCodeRef.current(b.rawValue, 'camera', lineId);
             }
           } catch { /* ignore */ }
         }
@@ -400,7 +465,7 @@ export function ReceiptConfirmPage({
   const handleManualAdd = () => {
     const code = manualCode.trim();
     if (!code) return;
-    processCode(code, 'manual');
+    processCodeRef.current(code, 'manual');
     setManualCode('');
     manualInputRef.current?.focus();
   };
@@ -408,7 +473,7 @@ export function ReceiptConfirmPage({
   const handleLineManualAdd = (lineId: string) => {
     const code = lineManualCode.trim();
     if (!code) return;
-    processLineCode(code, 'manual', lineId);
+    processLineCodeRef.current(code, 'manual', lineId);
     setLineManualCode('');
     lineManualInputRef.current?.focus();
   };
@@ -720,13 +785,11 @@ export function ReceiptConfirmPage({
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     <div className="flex items-center gap-0.5">
-                      <input
-                        type="number"
-                        min={0}
-                        max={line.qty}
+                      <QtyInput
                         value={confirmed}
-                        onChange={e => handleSetQty(line.id, parseInt(e.target.value) || 0)}
-                        className={`w-12 h-8 text-center text-sm font-bold tabular-nums rounded-lg border border-border bg-muted/30 focus:outline-none focus:ring-2 focus:ring-ring
+                        max={line.qty}
+                        onCommit={(n) => handleSetQty(line.id, n)}
+                        className={`w-14 h-8 text-center text-sm font-bold tabular-nums rounded-lg border border-border bg-muted/30 focus:outline-none focus:ring-2 focus:ring-ring
                           ${done ? 'text-success' : partial ? 'text-amber-600 dark:text-amber-400' : 'text-foreground'}`}
                       />
                       <span className="text-muted-foreground text-sm">/{line.qty}</span>
