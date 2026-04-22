@@ -5,6 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { AppState, Location, LocationStock, crudAction, generateId } from '@/data/store';
+import { findDuplicateLocation } from '@/data/validation';
+import { locationFormSchema, firstError } from '@/data/schemas';
+import { toast } from 'sonner';
 
 function migrateParentStocksToChild(state: AppState, parentId: string, childId: string): { state: AppState; affected: LocationStock[] } {
   const parentStocks = (state.locationStocks || []).filter(ls => ls.locationId === parentId && ls.quantity > 0);
@@ -50,15 +53,27 @@ export function AddLocationModal({
   const handleSave = () => {
     if (!editLocation && batchMode && batchCount > 1 && prefix.trim()) {
       const newLocs: Location[] = [];
+      const duplicates: string[] = [];
       for (let i = 1; i <= batchCount; i++) {
+        const locName = `${prefix.trim()}${i}`;
+        if (findDuplicateLocation(state, locName, warehouseId || undefined, parentId || undefined)) {
+          duplicates.push(locName);
+          continue;
+        }
         newLocs.push({
           id: generateId(),
-          name: `${prefix.trim()}${i}`,
+          name: locName,
           description: description.trim() || undefined,
           parentId: parentId || undefined,
           warehouseId: warehouseId || undefined,
         });
       }
+      if (duplicates.length > 0) {
+        toast.error(`Локации уже существуют: ${duplicates.join(', ')}`, {
+          description: newLocs.length > 0 ? `Будут созданы только новые (${newLocs.length}).` : 'Создание отменено — все названия уже заняты.',
+        });
+      }
+      if (newLocs.length === 0) return;
       let next: AppState = { ...state, locations: [...state.locations, ...newLocs] };
       let migratedStocks: LocationStock[] = [];
       if (willMigrate && newLocs[0]) {
@@ -73,6 +88,25 @@ export function AddLocationModal({
       return;
     }
     if (!name.trim()) return;
+    const parsed = locationFormSchema.safeParse({ name, description, warehouseId, parentId });
+    const errMsg = firstError(parsed);
+    if (errMsg) {
+      toast.error(errMsg);
+      return;
+    }
+    const dup = findDuplicateLocation(
+      state,
+      name,
+      warehouseId || undefined,
+      parentId || undefined,
+      editLocation?.id,
+    );
+    if (dup) {
+      toast.error('Локация с таким названием уже есть в этом месте', {
+        description: `Найдено: «${dup.name}». Используй другое название.`,
+      });
+      return;
+    }
     if (editLocation && editLocation.id) {
       const next = {
         ...state,

@@ -7,6 +7,9 @@ import Icon from '@/components/ui/icon';
 import { AppState, AssetType, Item, crudAction, generateId, updateLocationStock, updateWarehouseStock } from '@/data/store';
 import ItemDetailModal from '@/components/ItemDetailModal';
 import { UNITS } from '@/constants/units';
+import { findDuplicateItem } from '@/data/validation';
+import { itemFormSchema, firstError } from '@/data/schemas';
+import { toast } from 'sonner';
 
 function NewItemModal({ state, onStateChange, onClose }: {
   state: AppState; onStateChange: (s: AppState) => void; onClose: () => void;
@@ -27,8 +30,12 @@ function NewItemModal({ state, onStateChange, onClose }: {
     : state.locations
   ).filter(l => !state.locations.some(ch => ch.parentId === l.id));
 
-  const handleSave = () => {
-    if (!name.trim()) { setError('Введите название'); return; }
+  const [confirmDuplicate, setConfirmDuplicate] = useState<Item | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const doCreate = async () => {
+    if (saving) return;
+    setSaving(true);
     const fallbackLeaf = state.locations.find(l => !state.locations.some(ch => ch.parentId === l.id));
     const newItem: Item = {
       id: generateId(),
@@ -55,8 +62,25 @@ function NewItemModal({ state, onStateChange, onClose }: {
     onStateChange(next);
     const lsArr = (next.locationStocks || []).filter(ls => ls.itemId === newItem.id);
     const wsArr = (next.warehouseStocks || []).filter(ws => ws.itemId === newItem.id);
-    crudAction('upsert_item', { item: newItem, locationStocks: lsArr, warehouseStocks: wsArr });
+    const ok = await crudAction('upsert_item', { item: newItem, locationStocks: lsArr, warehouseStocks: wsArr });
+    setSaving(false);
+    if (!ok) return;
+    toast.success(`Товар «${newItem.name}» создан`);
     onClose();
+  };
+
+  const handleSave = () => {
+    const parsed = itemFormSchema.safeParse({
+      name, unit, categoryId, quantity: qty, lowStockThreshold: threshold, description,
+    });
+    const errMsg = firstError(parsed);
+    if (errMsg) { setError(errMsg); return; }
+    const dup = findDuplicateItem(state, name, categoryId);
+    if (dup) {
+      setConfirmDuplicate(dup);
+      return;
+    }
+    doCreate();
   };
 
   return (
@@ -133,13 +157,50 @@ function NewItemModal({ state, onStateChange, onClose }: {
             <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Краткое описание..." />
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} className="flex-1">Отмена</Button>
-            <Button onClick={handleSave} className="flex-1 font-semibold">
-              <Icon name="Plus" size={14} className="mr-1.5" />Создать
+            <Button variant="outline" onClick={onClose} className="flex-1" disabled={saving}>Отмена</Button>
+            <Button onClick={handleSave} className="flex-1 font-semibold" disabled={saving}>
+              <Icon name={saving ? 'Loader2' : 'Plus'} size={14} className={`mr-1.5 ${saving ? 'animate-spin' : ''}`} />
+              {saving ? 'Создание...' : 'Создать'}
             </Button>
           </div>
         </div>
       </DialogContent>
+      {confirmDuplicate && (
+        <Dialog open onOpenChange={() => setConfirmDuplicate(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+                  <Icon name="AlertTriangle" size={16} />
+                </div>
+                Товар с таким названием уже есть
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+                <div className="font-medium text-foreground">{confirmDuplicate.name}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  В категории «{state.categories.find(c => c.id === confirmDuplicate.categoryId)?.name || '—'}» · остаток: {confirmDuplicate.quantity} {confirmDuplicate.unit}
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Обычно это ошибка — лучше добавить приход к существующему товару, а не создавать дубликат.
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setConfirmDuplicate(null)} className="flex-1">
+                  Изменить название
+                </Button>
+                <Button
+                  onClick={() => { setConfirmDuplicate(null); doCreate(); }}
+                  className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold"
+                >
+                  Всё равно создать
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   );
 }

@@ -21,6 +21,7 @@ type Props = {
   setEdited: (v: EditedState) => void;
   setEditing: (v: boolean) => void;
   handleSaveEdit: () => void;
+  savingEdit?: boolean;
   showDeleteConfirm: boolean;
   setShowDeleteConfirm: (v: boolean) => void;
   handleDelete: () => void;
@@ -35,6 +36,7 @@ export default function ItemDetailInfoTab({
   setEdited,
   setEditing,
   handleSaveEdit,
+  savingEdit,
   showDeleteConfirm,
   setShowDeleteConfirm,
   handleDelete,
@@ -75,9 +77,10 @@ export default function ItemDetailInfoTab({
               className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
           </div>
           <div className="flex gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={() => setEditing(false)} className="flex-1">Отмена</Button>
-            <Button size="sm" onClick={handleSaveEdit} className="flex-1 gap-1.5">
-              <Icon name="Check" size={14} />Сохранить
+            <Button variant="outline" size="sm" onClick={() => setEditing(false)} className="flex-1" disabled={savingEdit}>Отмена</Button>
+            <Button size="sm" onClick={handleSaveEdit} className="flex-1 gap-1.5" disabled={savingEdit}>
+              <Icon name={savingEdit ? 'Loader2' : 'Check'} size={14} className={savingEdit ? 'animate-spin' : ''} />
+              {savingEdit ? 'Сохранение...' : 'Сохранить'}
             </Button>
           </div>
         </div>

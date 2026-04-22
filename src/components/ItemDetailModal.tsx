@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import Icon from '@/components/ui/icon';
 import { Item, AppState, AssetType, crudAction } from '@/data/store';
+import { findDuplicateItem } from '@/data/validation';
+import { toast } from 'sonner';
 import { useItemPhoto } from '@/hooks/useItemPhoto';
 import OperationModal from './OperationModal';
 import { ItemHistoryTab } from './ItemHistoryTab';
@@ -26,6 +28,7 @@ export default function ItemDetailModal({ item, state, onStateChange, onClose }:
   const [activeTab, setActiveTab] = useState<Tab>('info');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [edited, setEdited] = useState<{ name: string; unit: string; assetType: AssetType; description: string; categoryId: string; lowStockThreshold: number }>({ name: '', unit: '', assetType: 'МЗ', description: '', categoryId: '', lowStockThreshold: 5 });
   const liveItem = item ? (state.items.find(i => i.id === item.id) || item) : ({ id: '' } as Item);
   const photo = useItemPhoto(liveItem, state, onStateChange);
@@ -78,10 +81,19 @@ export default function ItemDetailModal({ item, state, onStateChange, onClose }:
     onClose();
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
+    if (savingEdit) return;
+    const newName = edited.name.trim() || liveItem.name;
+    const dup = findDuplicateItem(state, newName, edited.categoryId, liveItem.id);
+    if (dup) {
+      toast.error('Товар с таким названием уже существует в этой категории', {
+        description: `Найден: «${dup.name}» (остаток ${dup.quantity} ${dup.unit}). Используй другое название или перенеси остатки.`,
+      });
+      return;
+    }
     const updatedItem = {
       ...liveItem,
-      name: edited.name.trim() || liveItem.name,
+      name: newName,
       unit: edited.unit.trim() || liveItem.unit,
       assetType: edited.assetType,
       description: edited.description.trim(),
@@ -90,7 +102,11 @@ export default function ItemDetailModal({ item, state, onStateChange, onClose }:
     };
     const next = { ...state, items: state.items.map(i => i.id === liveItem.id ? updatedItem : i) };
     onStateChange(next);
-    crudAction('upsert_item', { item: updatedItem, locationStocks: state.locationStocks.filter(ls => ls.itemId === liveItem.id), warehouseStocks: (state.warehouseStocks || []).filter(ws => ws.itemId === liveItem.id) });
+    setSavingEdit(true);
+    const ok = await crudAction('upsert_item', { item: updatedItem, locationStocks: state.locationStocks.filter(ls => ls.itemId === liveItem.id), warehouseStocks: (state.warehouseStocks || []).filter(ws => ws.itemId === liveItem.id) });
+    setSavingEdit(false);
+    if (!ok) return;
+    toast.success('Изменения сохранены');
     setEditing(false);
   };
 
@@ -193,6 +209,7 @@ export default function ItemDetailModal({ item, state, onStateChange, onClose }:
                 setEdited={setEdited}
                 setEditing={setEditing}
                 handleSaveEdit={handleSaveEdit}
+                savingEdit={savingEdit}
                 showDeleteConfirm={showDeleteConfirm}
                 setShowDeleteConfirm={setShowDeleteConfirm}
                 handleDelete={handleDelete}

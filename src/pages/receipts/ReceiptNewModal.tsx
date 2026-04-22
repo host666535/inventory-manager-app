@@ -11,6 +11,9 @@ import {
   Attachment, Partner, Item,
 } from '@/data/store';
 import { UNITS } from '@/constants/units';
+import { findDuplicateItem } from '@/data/validation';
+import { receiptLineSchema, firstError } from '@/data/schemas';
+import { toast } from 'sonner';
 
 const COMMON_DOC_FIELDS = [
   'Номер ТТН', 'Номер заказа', 'Дата поставки', 'Договор №',
@@ -54,6 +57,7 @@ export function NewReceiptModal({
   const [lines, setLines] = useState<DraftLine[]>([
     { id: generateId(), itemId: '', itemLabel: '', isNew: false, qty: '1', unit: 'шт', price: '', categoryId: '', description: '', lowStockThreshold: '5' },
   ]);
+  const [saving, setSaving] = useState(false);
 
   const supplierOptions: AutocompleteOption[] = useMemo(() =>
     (state.partners || []).filter(p => p.type === 'supplier').map(p => ({
@@ -124,8 +128,22 @@ export function NewReceiptModal({
     return new Set([...seen.entries()].filter(([, c]) => c > 1).map(([k]) => k));
   }, [validLines]);
 
-  const handleSave = () => {
-    if (!canSave) return;
+  const handleSave = async () => {
+    if (!canSave || saving) return;
+
+    for (let i = 0; i < validLines.length; i++) {
+      const l = validLines[i];
+      const parsed = receiptLineSchema.safeParse({
+        itemLabel: l.itemLabel, qty: l.qty, unit: l.unit, price: l.price || 0,
+      });
+      const errMsg = firstError(parsed);
+      if (errMsg) {
+        toast.error(`Строка №${i + 1}: ${errMsg}`);
+        return;
+      }
+    }
+
+    setSaving(true);
 
     let next = { ...state };
 
@@ -150,21 +168,27 @@ export function NewReceiptModal({
       let itemId = line.itemId;
 
       if (!itemId) {
-        const leafLoc = next.locations.find(l => !next.locations.some(ch => ch.parentId === l.id));
-        const newItem: Item = {
-          id: generateId(),
-          name: line.itemLabel.trim(),
-          categoryId: line.categoryId || (next.categories[0]?.id || ''),
-          locationId: leafLoc?.id || '',
-          description: line.description || undefined,
-          unit: line.unit,
-          quantity: 0,
-          lowStockThreshold: parseInt(line.lowStockThreshold) || 5,
-          createdAt: new Date().toISOString(),
-        };
-        next = { ...next, items: [...next.items, newItem] };
-        itemId = newItem.id;
-        newItems.push(newItem);
+        const categoryId = line.categoryId || (next.categories[0]?.id || '');
+        const existingDup = findDuplicateItem(next, line.itemLabel, categoryId);
+        if (existingDup) {
+          itemId = existingDup.id;
+        } else {
+          const leafLoc = next.locations.find(l => !next.locations.some(ch => ch.parentId === l.id));
+          const newItem: Item = {
+            id: generateId(),
+            name: line.itemLabel.trim(),
+            categoryId,
+            locationId: leafLoc?.id || '',
+            description: line.description || undefined,
+            unit: line.unit,
+            quantity: 0,
+            lowStockThreshold: parseInt(line.lowStockThreshold) || 5,
+            createdAt: new Date().toISOString(),
+          };
+          next = { ...next, items: [...next.items, newItem] };
+          itemId = newItem.id;
+          newItems.push(newItem);
+        }
       }
 
       receiptLines.push({
@@ -206,14 +230,19 @@ export function NewReceiptModal({
     };
 
     onStateChange(next);
-    crudAction('upsert_receipt', { receipt, receiptLines: receipt.lines });
-    crudAction('update_setting', { key: 'receiptCounter', value: String(newCounter) });
+    const tasks: Promise<boolean>[] = [];
+    tasks.push(crudAction('upsert_receipt', { receipt, receiptLines: receipt.lines }));
+    tasks.push(crudAction('update_setting', { key: 'receiptCounter', value: String(newCounter) }));
     for (const newItem of newItems) {
-      crudAction('upsert_item', { item: newItem });
+      tasks.push(crudAction('upsert_item', { item: newItem }));
     }
     if (newSupplierPartner) {
-      crudAction('upsert_partner', { partner: newSupplierPartner });
+      tasks.push(crudAction('upsert_partner', { partner: newSupplierPartner }));
     }
+    const results = await Promise.all(tasks);
+    setSaving(false);
+    if (results.some(r => !r)) return;
+    toast.success('Заявка на приход создана');
     onCreated?.(receipt);
     onClose();
   };
@@ -592,14 +621,14 @@ export function NewReceiptModal({
           )}
 
           <div className="flex gap-2 pt-1">
-            <Button variant="outline" onClick={onClose} className="flex-1">Отмена</Button>
+            <Button variant="outline" onClick={onClose} className="flex-1" disabled={saving}>Отмена</Button>
             <Button
               onClick={handleSave}
-              disabled={!canSave}
+              disabled={!canSave || saving}
               className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold gap-2"
             >
-              <Icon name="ClipboardCheck" size={16} />
-              Создать заявку → Этап 2
+              <Icon name={saving ? 'Loader2' : 'ClipboardCheck'} size={16} className={saving ? 'animate-spin' : ''} />
+              {saving ? 'Создание...' : 'Создать заявку → Этап 2'}
             </Button>
           </div>
         </div>

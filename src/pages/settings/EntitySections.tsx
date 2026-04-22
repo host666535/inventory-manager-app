@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
 import { AppState, crudAction, Category, Location, Warehouse, generateId } from '@/data/store';
+import { findDuplicateCategory, findDuplicateWarehouse } from '@/data/validation';
+import { warehouseFormSchema, categoryFormSchema, firstError } from '@/data/schemas';
 
 const CAT_COLORS = ['#6366f1', '#0ea5e9', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
@@ -21,6 +23,16 @@ export function WarehousesSection({ state, onStateChange, onDeleteConfirm }: Ent
 
   const addWarehouse = () => {
     if (!newWhName.trim()) return;
+    const parsed = warehouseFormSchema.safeParse({
+      name: newWhName, address: newWhAddress, description: newWhDesc,
+    });
+    const errMsg = firstError(parsed);
+    if (errMsg) { toast.error(errMsg); return; }
+    const dup = findDuplicateWarehouse(state, newWhName);
+    if (dup) {
+      toast.error(`Склад «${dup.name}» уже существует`);
+      return;
+    }
     const wh: Warehouse = {
       id: generateId(), name: newWhName.trim(),
       address: newWhAddress.trim() || undefined,
@@ -30,6 +42,7 @@ export function WarehousesSection({ state, onStateChange, onDeleteConfirm }: Ent
     const next = { ...state, warehouses: [...(state.warehouses || []), wh] };
     onStateChange(next); crudAction('upsert_warehouse', { warehouse: wh });
     setNewWhName(''); setNewWhAddress(''); setNewWhDesc('');
+    toast.success(`Склад «${wh.name}» создан`);
   };
 
   const deleteWarehouse = (id: string) => {
@@ -201,11 +214,20 @@ export function CategoriesSection({ state, onStateChange, onDeleteConfirm }: Ent
 
   const addCategory = () => {
     if (!newCatName.trim()) return;
+    const parsed = categoryFormSchema.safeParse({ name: newCatName });
+    const errMsg = firstError(parsed);
+    if (errMsg) { toast.error(errMsg); return; }
+    const dup = findDuplicateCategory(state, newCatName);
+    if (dup) {
+      toast.error(`Категория «${dup.name}» уже существует`);
+      return;
+    }
     const cat: Category = { id: generateId(), name: newCatName.trim(), color: newCatColor };
     const next = { ...state, categories: [...state.categories, cat] };
     onStateChange(next);
     crudAction('upsert_category', { category: cat });
     setNewCatName('');
+    toast.success(`Категория «${cat.name}» создана`);
   };
 
   const deleteCategory = (id: string) => {
