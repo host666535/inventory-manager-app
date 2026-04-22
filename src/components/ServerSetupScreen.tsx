@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
-import { saveServerUrl, pingServer, getSavedServerUrl } from '@/data/serverConfig';
+import { saveServerUrl, pingServer, getSavedServerUrl, normalizeServerUrl } from '@/data/serverConfig';
 
 declare class BarcodeDetector {
   constructor(options?: { formats: string[] });
@@ -17,6 +17,7 @@ export default function ServerSetupScreen({ onConnected }: { onConnected: () => 
   const [checking, setChecking] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [cameraError, setCameraError] = useState('');
+  const [lastError, setLastError] = useState<{ msg: string; hint?: string } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number>(0);
@@ -79,14 +80,20 @@ export default function ServerSetupScreen({ onConnected }: { onConnected: () => 
       toast.error('Введи адрес сервера');
       return;
     }
+    setLastError(null);
+    // Нормализуем введённый адрес: подставляем http:// и :3000 при необходимости
+    const normalized = normalizeServerUrl(url);
+    if (normalized !== url) setUrl(normalized);
     setChecking(true);
-    const result = await pingServer(url);
+    const result = await pingServer(normalized);
     setChecking(false);
     if (!result.ok) {
-      toast.error(result.error || 'Сервер не отвечает');
+      const msg = result.error || 'Сервер не отвечает';
+      setLastError({ msg, hint: result.hint });
+      toast.error(msg);
       return;
     }
-    saveServerUrl(url);
+    saveServerUrl(normalized);
     toast.success('Подключение установлено');
     onConnected();
   }, [url, onConnected]);
@@ -172,9 +179,20 @@ export default function ServerSetupScreen({ onConnected }: { onConnected: () => 
             )}
           </Button>
 
+          {lastError && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive space-y-1.5">
+              <div className="flex items-start gap-2">
+                <Icon name="AlertCircle" size={14} className="mt-0.5 shrink-0" />
+                <p className="font-medium">{lastError.msg}</p>
+              </div>
+              {lastError.hint && <p className="pl-6 text-destructive/80">{lastError.hint}</p>}
+            </div>
+          )}
+
           <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
             <p className="font-medium text-foreground">Подсказка</p>
             <p>Сервер и устройство должны быть в одной Wi-Fi сети. Адрес показывает администратор после запуска сервера.</p>
+            <p>Можно ввести только IP — порт <code className="text-foreground">:3000</code> и <code className="text-foreground">http://</code> подставятся автоматически.</p>
           </div>
         </CardContent>
       </Card>

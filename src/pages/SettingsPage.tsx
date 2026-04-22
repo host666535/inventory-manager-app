@@ -168,8 +168,8 @@ export default function SettingsPage({ state, onStateChange }: Props) {
                   <Icon name="Server" size={16} className="text-primary" />
                   Адрес сервера
                 </h2>
-                {mobileApp && savedServer ? (
-                  <>
+                {mobileApp && savedServer && (
+                  <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">
                       Сейчас приложение подключено к серверу <code className="text-foreground bg-muted px-1.5 py-0.5 rounded text-xs">{savedServer}</code>. Если сменился Wi-Fi или IP сервера — задай новый адрес.
                     </p>
@@ -185,9 +185,11 @@ export default function SettingsPage({ state, onStateChange }: Props) {
                       <Icon name="Plug" size={14} className="mr-1.5" />
                       Сменить адрес сервера
                     </Button>
-                  </>
-                ) : (
-                  <>
+                  </div>
+                )}
+
+                {!mobileApp && (
+                  <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">
                       Покажи QR-код, чтобы быстро подключить мобильное приложение к этому серверу. Сотрудник наводит камеру в приложении — и адрес сохраняется автоматически.
                     </p>
@@ -199,7 +201,7 @@ export default function SettingsPage({ state, onStateChange }: Props) {
                       <Icon name="QrCode" size={14} className="mr-1.5" />
                       Показать QR-код для мобильного приложения
                     </Button>
-                  </>
+                  </div>
                 )}
               </div>
 

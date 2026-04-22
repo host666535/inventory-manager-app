@@ -20,9 +20,15 @@ export function clearServerUrl(): void {
 
 export function isMobileApp(): boolean {
   if (typeof window === 'undefined') return false;
+  // Надёжный признак — глобал, который Capacitor внедряет в WebView:
+  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  if (cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform()) return true;
+  // Доп. эвристика — нативные схемы.
   const proto = window.location.protocol;
-  const host = window.location.hostname;
-  return proto === 'capacitor:' || proto === 'file:' || host === 'localhost' || host === '';
+  if (proto === 'capacitor:' || proto === 'file:') return true;
+  // ВАЖНО: localhost сам по себе НЕ значит «мобильное приложение» —
+  // vite dev на ПК тоже открывается как http://localhost:5173.
+  return false;
 }
 
 export function resolveBaseUrl(): string | null {
@@ -78,23 +84,90 @@ export function buildWsUrl(): string {
   return `${wsProto}//${host}/ws`;
 }
 
-export async function pingServer(url: string, timeoutMs = 5000): Promise<{ ok: boolean; error?: string }> {
-  const cleaned = url.trim().replace(/\/+$/, '');
+/** Приводит ввод пользователя к валидному http-URL.
+ *  - Обрезает пробелы и завершающие слэши.
+ *  - Если нет схемы — добавляет http:// (частая ошибка ввода).
+ *  - Если указан только IP без порта — добавляет :3000 (порт нашего бэкенда). */
+export function normalizeServerUrl(raw: string): string {
+  let cleaned = raw.trim().replace(/\/+$/, '');
+  if (!cleaned) return '';
+  if (!/^https?:\/\//i.test(cleaned)) cleaned = `http://${cleaned}`;
+  // Добавляем порт 3000, если после хоста нет ни порта, ни пути.
+  try {
+    const u = new URL(cleaned);
+    if (!u.port && u.pathname === '/' && !/:\d+/.test(u.host)) {
+      // Голый IP/hostname без порта → подставляем 3000
+      u.port = '3000';
+      cleaned = u.toString().replace(/\/+$/, '');
+    }
+  } catch {
+    /* если URL невалидный — оставляем как есть, pingServer отрапортует */
+  }
+  return cleaned;
+}
+
+export async function pingServer(url: string, timeoutMs = 6000): Promise<{ ok: boolean; error?: string; hint?: string }> {
+  const cleaned = normalizeServerUrl(url);
   if (!cleaned) return { ok: false, error: 'Пустой адрес' };
   if (!/^https?:\/\//i.test(cleaned)) {
-    return { ok: false, error: 'Адрес должен начинаться с http:// или https://' };
+    return { ok: false, error: 'Неверный формат адреса', hint: 'Пример: http://192.168.1.100:3000' };
   }
+  try {
+    new URL(cleaned);
+  } catch {
+    return { ok: false, error: 'Неверный формат адреса', hint: 'Пример: http://192.168.1.100:3000' };
+  }
+
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetch(`${cleaned}/api/crud?action=check`, { signal: ctrl.signal });
+    const res = await fetch(`${cleaned}/api/crud?action=check`, {
+      signal: ctrl.signal,
+      method: 'GET',
+      cache: 'no-store',
+    });
     clearTimeout(timer);
+    if (res.status === 404) {
+      return {
+        ok: false,
+        error: 'Адрес доступен, но это не сервер StockBase',
+        hint: 'Проверь порт и версию сервера (ожидается роут /api/crud).',
+      };
+    }
     if (!res.ok && res.status !== 401) {
-      return { ok: false, error: `Сервер ответил ${res.status}` };
+      return { ok: false, error: `Сервер ответил с кодом ${res.status}` };
+    }
+    // Подтверждаем, что это именно наш сервер — в ответе должен быть updatedAt.
+    try {
+      const data = await res.json();
+      if (!data || typeof data !== 'object' || !('updatedAt' in data)) {
+        return {
+          ok: false,
+          error: 'Это не сервер StockBase',
+          hint: 'Адрес доступен, но отвечает не тот сервис. Проверь порт.',
+        };
+      }
+    } catch {
+      /* не JSON — считаем сервером StockBase уязвимо, но пусть подключится */
     }
     return { ok: true };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Не удалось подключиться';
-    return { ok: false, error: msg };
+    const err = e as { name?: string; message?: string };
+    if (err?.name === 'AbortError') {
+      return {
+        ok: false,
+        error: 'Сервер не ответил за 6 секунд',
+        hint: 'Проверь, что сервер запущен и телефон в той же Wi-Fi сети.',
+      };
+    }
+    const msg = err?.message || '';
+    if (/Failed to fetch|NetworkError|Network request failed/i.test(msg)) {
+      return {
+        ok: false,
+        error: 'Сервер не отвечает',
+        hint: 'Возможные причины: 1) неверный IP или порт; 2) сервер не запущен; 3) телефон не в той же Wi-Fi сети; 4) брандмауэр блокирует порт.',
+      };
+    }
+    return { ok: false, error: msg || 'Не удалось подключиться' };
   }
 }
