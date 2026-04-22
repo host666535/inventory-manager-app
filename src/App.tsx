@@ -25,8 +25,8 @@ import InstallPWABanner from '@/components/InstallPWABanner';
 import { realtime, RealtimeStatus } from '@/data/realtime';
 import RealtimeIndicator from '@/components/RealtimeIndicator';
 import OfflineOverlay from '@/components/OfflineOverlay';
-import ServerSetupScreen from '@/components/ServerSetupScreen';
-import { needsServerSetup, clearServerUrl, isMobileApp } from '@/data/serverConfig';
+import ServerUrlDialog from '@/components/ServerUrlDialog';
+import { isMobileApp } from '@/data/serverConfig';
 
 function parseQRParams() {
   const params = new URLSearchParams(window.location.search);
@@ -50,27 +50,12 @@ const GUEST_USER: AuthUser = {
 export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(AUTH_DISABLED ? GUEST_USER : null);
   const [authLoading, setAuthLoading] = useState(!AUTH_DISABLED);
-  // ЖЁСТКОЕ правило: экран настройки сервера показываем ТОЛЬКО в мобильном APK.
-  // На ПК-вебе бэкенд всегда доступен относительно текущего хоста (/api/crud),
-  // и если он не отвечает — это экран «Нет подключения» (OfflineOverlay),
-  // а не первичная настройка.
-  const [serverSetupNeeded, setServerSetupNeeded] = useState(() => isMobileApp() && needsServerSetup());
+  // Модалка ввода URL сервера. Открывается из OfflineOverlay в APK
+  // или из настроек. Стартовый экран настройки больше не используется.
+  const [serverDialogOpen, setServerDialogOpen] = useState(false);
 
-  const handleServerConnected = useCallback(() => {
-    setServerSetupNeeded(false);
-    window.location.reload();
-  }, []);
-
-  const handleServerReset = useCallback(() => {
-    clearServerUrl();
-    // То же правило: сбрасываем адрес и показываем экран настройки только в APK.
-    if (isMobileApp()) {
-      setServerSetupNeeded(true);
-    } else {
-      // На ПК-вебе после сброса просто перезагружаем страницу — фронт снова
-      // пойдёт на /api/crud того же хоста.
-      window.location.reload();
-    }
+  const handleChangeServer = useCallback(() => {
+    setServerDialogOpen(true);
   }, []);
 
   useEffect(() => {
@@ -291,15 +276,6 @@ export default function App() {
     if (p !== 'assembly')  setQrOrderId(null);
   };
 
-  if (serverSetupNeeded && isMobileApp()) {
-    return (
-      <TooltipProvider>
-        <Toaster position="top-right" />
-        <ServerSetupScreen onConnected={handleServerConnected} />
-      </TooltipProvider>
-    );
-  }
-
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30">
@@ -329,11 +305,14 @@ export default function App() {
 
   if (initialLoadFailed) {
     return (
-      <OfflineOverlay
-        variant="full"
-        onRetry={handleRetryConnection}
-        onChangeServer={handleServerReset}
-      />
+      <>
+        <OfflineOverlay
+          variant="full"
+          onRetry={handleRetryConnection}
+          onChangeServer={isMobileApp() ? handleChangeServer : undefined}
+        />
+        <ServerUrlDialog open={serverDialogOpen} onOpenChange={setServerDialogOpen} />
+      </>
     );
   }
 
@@ -370,8 +349,13 @@ export default function App() {
         </Layout>
         <RealtimeIndicator status={wsStatus} />
         {wsDisconnected && (
-          <OfflineOverlay variant="banner" onRetry={handleRetryConnection} />
+          <OfflineOverlay
+            variant="banner"
+            onRetry={handleRetryConnection}
+            onChangeServer={isMobileApp() ? handleChangeServer : undefined}
+          />
         )}
+        <ServerUrlDialog open={serverDialogOpen} onOpenChange={setServerDialogOpen} />
         <InstallPWABanner />
       </TooltipProvider>
     </AuthContext.Provider>

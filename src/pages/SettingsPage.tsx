@@ -9,7 +9,8 @@ import { ProfileSection, AlertsSection, TelegramSection } from './settings/Profi
 import { WarehousesSection, CategoriesSection, LocationsSection } from './settings/EntitySections';
 import UsersSection from './settings/UsersSection';
 import ServerQRDialog from '@/components/ServerQRDialog';
-import { isMobileApp, getSavedServerUrl, clearServerUrl } from '@/data/serverConfig';
+import ServerUrlDialog from '@/components/ServerUrlDialog';
+import { isMobileApp, getSavedServerUrl } from '@/data/serverConfig';
 
 type Props = {
   state: AppState;
@@ -26,6 +27,7 @@ export default function SettingsPage({ state, onStateChange }: Props) {
   const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [syncing, setSyncing] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [serverUrlDialogOpen, setServerUrlDialogOpen] = useState(false);
   const mobileApp = isMobileApp();
   const savedServer = getSavedServerUrl();
 
@@ -168,22 +170,22 @@ export default function SettingsPage({ state, onStateChange }: Props) {
                   <Icon name="Server" size={16} className="text-primary" />
                   Адрес сервера
                 </h2>
-                {mobileApp && savedServer && (
+                {mobileApp && (
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">
-                      Сейчас приложение подключено к серверу <code className="text-foreground bg-muted px-1.5 py-0.5 rounded text-xs">{savedServer}</code>. Если сменился Wi-Fi или IP сервера — задай новый адрес.
+                      {savedServer ? (
+                        <>Сейчас приложение подключено к серверу <code className="text-foreground bg-muted px-1.5 py-0.5 rounded text-xs">{savedServer}</code>. Если сменился Wi-Fi или IP сервера — задай новый адрес.</>
+                      ) : (
+                        <>Адрес сервера ещё не задан. Введи его здесь, чтобы подключиться.</>
+                      )}
                     </p>
                     <Button
                       variant="outline"
                       className="justify-start"
-                      onClick={() => {
-                        clearServerUrl();
-                        toast.success('Адрес сервера сброшен. Сейчас откроется экран настройки.');
-                        setTimeout(() => window.location.reload(), 800);
-                      }}
+                      onClick={() => setServerUrlDialogOpen(true)}
                     >
                       <Icon name="Plug" size={14} className="mr-1.5" />
-                      Сменить адрес сервера
+                      {savedServer ? 'Сменить адрес сервера' : 'Задать адрес сервера'}
                     </Button>
                   </div>
                 )}
@@ -386,6 +388,7 @@ export default function SettingsPage({ state, onStateChange }: Props) {
         </Dialog>
       )}
       <ServerQRDialog open={qrDialogOpen} onClose={() => setQrDialogOpen(false)} />
+      <ServerUrlDialog open={serverUrlDialogOpen} onOpenChange={setServerUrlDialogOpen} />
     </div>
   );
 }
