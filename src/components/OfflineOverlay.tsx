@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
-import { isMobileApp, getSavedServerUrl } from '@/data/serverConfig';
+import { isMobileApp, getSavedServerUrl, resolveBaseUrl } from '@/data/serverConfig';
 
 /**
  * Оверлей «Нет подключения».
@@ -20,7 +20,10 @@ export default function OfflineOverlay({
   onRetry: () => void | Promise<void>;
   onChangeServer?: () => void;
 }) {
-  const showChangeServer = isMobileApp() && !!getSavedServerUrl() && !!onChangeServer;
+  // В мобильном APK ВСЕГДА даём сменить адрес сервера — это единственный способ
+  // выйти из ситуации, когда введён неправильный IP/порт.
+  const showChangeServer = isMobileApp() && !!onChangeServer;
+  const currentServerUrl = getSavedServerUrl() || resolveBaseUrl();
   const [retrying, setRetrying] = useState(false);
 
   const handleRetry = async () => {
@@ -45,6 +48,25 @@ export default function OfflineOverlay({
             <p className="text-sm text-muted-foreground">
               Приложение работает только онлайн. Проверьте интернет и состояние сервера.
             </p>
+          </div>
+          {currentServerUrl && (
+            <div className="rounded-lg bg-muted/60 border border-border px-3 py-2 text-left">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">
+                Текущий адрес сервера
+              </div>
+              <div className="text-xs font-mono text-foreground break-all">
+                {currentServerUrl}
+              </div>
+            </div>
+          )}
+          <div className="text-left text-xs text-muted-foreground space-y-1">
+            <div className="font-medium text-foreground">Проверь:</div>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>сервер StockBase запущен на компьютере</li>
+              <li>телефон и компьютер в одной Wi-Fi сети</li>
+              <li>IP-адрес и порт указаны верно</li>
+              <li>брандмауэр не блокирует порт 3000</li>
+            </ul>
           </div>
           <Button onClick={handleRetry} disabled={retrying} className="w-full">
             <Icon
