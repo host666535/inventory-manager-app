@@ -303,13 +303,17 @@ export default function App() {
     );
   }
 
-  if (initialLoadFailed) {
+  // Полноэкранный блок «Нет подключения» — ТОЛЬКО в мобильном APK.
+  // На ПК-вебе (preview, локальный запуск без сервера и т.п.) не блокируем
+  // пользователя: пускаем в интерфейс, а о проблеме подключения сообщаем
+  // ненавязчивым баннером (variant="banner").
+  if (initialLoadFailed && isMobileApp()) {
     return (
       <>
         <OfflineOverlay
           variant="full"
           onRetry={handleRetryConnection}
-          onChangeServer={isMobileApp() ? handleChangeServer : undefined}
+          onChangeServer={handleChangeServer}
         />
         <ServerUrlDialog open={serverDialogOpen} onOpenChange={setServerDialogOpen} />
       </>
@@ -348,11 +352,14 @@ export default function App() {
           {page === 'settings'     && <SettingsPage state={state} onStateChange={handleStateChange} />}
         </Layout>
         <RealtimeIndicator status={wsStatus} />
-        {wsDisconnected && (
+        {/* Блокирующий баннер «нет связи» — только в APK.
+            На ПК-вебе достаточно маленького индикатора RealtimeIndicator,
+            чтобы не мешать работать с интерфейсом. */}
+        {wsDisconnected && isMobileApp() && (
           <OfflineOverlay
             variant="banner"
             onRetry={handleRetryConnection}
-            onChangeServer={isMobileApp() ? handleChangeServer : undefined}
+            onChangeServer={handleChangeServer}
           />
         )}
         <ServerUrlDialog open={serverDialogOpen} onOpenChange={setServerDialogOpen} />
