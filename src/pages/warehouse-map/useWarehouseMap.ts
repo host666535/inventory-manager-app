@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { AppState, Location, Warehouse, crudAction } from '@/data/store';
 import { ZONE_COLORS, DEFAULT_LAYOUT, WarehouseLayout } from './WarehouseMapHelpers';
 
@@ -94,21 +94,21 @@ export function useWarehouseMap(
     );
   }, [search, categoryFilter, state]);
 
-  const handleItemDragStart = (e: React.DragEvent, itemId: string, fromLocationId: string) => {
+  const handleItemDragStart = useCallback((e: React.DragEvent, itemId: string, fromLocationId: string) => {
     setDragState({ itemId, fromLocationId });
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', `${itemId}::${fromLocationId}`);
-  };
+  }, []);
 
-  const handleDragOver = (e: React.DragEvent, locationId: string) => {
+  const handleDragOver = useCallback((e: React.DragEvent, locationId: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverLocationId(locationId);
-  };
+  }, []);
 
-  const handleDragLeave = () => setDragOverLocationId(null);
+  const handleDragLeave = useCallback(() => setDragOverLocationId(null), []);
 
-  const handleDrop = (e: React.DragEvent, toLocationId: string) => {
+  const handleDrop = useCallback((e: React.DragEvent, toLocationId: string) => {
     e.preventDefault();
     setDragOverLocationId(null);
     if (!dragState || dragState.fromLocationId === toLocationId) { setDragState(null); return; }
@@ -120,7 +120,7 @@ export function useWarehouseMap(
     }
     setMoveModal({ itemId: dragState.itemId, fromLocationId: dragState.fromLocationId, toLocationId });
     setDragState(null);
-  };
+  }, [dragState, state.locations]);
 
   const handleDeleteLocation = (locId: string) => {
     const hasStock = (state.locationStocks || []).some(ls => ls.locationId === locId && ls.quantity > 0);

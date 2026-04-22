@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { AppState, Location } from '@/data/store';
@@ -6,6 +6,7 @@ import QRDialog from '@/components/QRDialog';
 import { AddItemToLocationModal } from './WarehouseMapModals';
 import { MoveItemModal } from './MoveItemModal';
 import { getStockLevel, stockDotColor } from './WarehouseMapHelpers';
+import { useLocationStocks } from './useLocationStocks';
 
 type Props = {
   location: Location;
@@ -22,13 +23,16 @@ export default function LocationDetailPanel({
 }: Props) {
   const [showAddItem, setShowAddItem] = useState(false);
   const [moveItemId, setMoveItemId] = useState<string | null>(null);
-  const children = state.locations.filter(l => l.parentId === location.id);
+  const children = useMemo(
+    () => state.locations.filter(l => l.parentId === location.id),
+    [state.locations, location.id],
+  );
   const isParent = children.length > 0;
-  const locStocks = (state.locationStocks || [])
-    .filter(ls => ls.locationId === location.id && ls.quantity > 0)
-    .map(ls => ({ ...ls, item: state.items.find(i => i.id === ls.itemId) }))
-    .filter(ls => ls.item)
-    .sort((a, b) => a.item!.name.localeCompare(b.item!.name, 'ru'));
+  const rawStocks = useLocationStocks(state, location.id);
+  const locStocks = useMemo(
+    () => [...rawStocks].sort((a, b) => a.item.name.localeCompare(b.item.name, 'ru')),
+    [rawStocks],
+  );
 
   const totalItems = locStocks.length;
   const totalUnits = locStocks.reduce((s, ls) => s + ls.quantity, 0);
@@ -147,8 +151,8 @@ export default function LocationDetailPanel({
       ) : (
         <div className="space-y-1.5 overflow-y-auto flex-1">
           {locStocks.map(ls => {
-            const level = getStockLevel(ls.quantity, ls.item!.lowStockThreshold);
-            const cat = state.categories.find(c => c.id === ls.item!.categoryId);
+            const level = getStockLevel(ls.quantity, ls.item.lowStockThreshold);
+            const cat = state.categories.find(c => c.id === ls.item.categoryId);
             const otherLocs = (state.locationStocks || [])
               .filter(s => s.itemId === ls.itemId && s.locationId !== location.id && s.quantity > 0)
               .map(s => ({ ...s, loc: state.locations.find(l => l.id === s.locationId) }));
@@ -168,7 +172,7 @@ export default function LocationDetailPanel({
                       onClick={() => onItemSelect(ls.itemId)}
                       className="font-semibold text-sm text-foreground hover:text-primary transition-colors text-left w-full truncate"
                     >
-                      {ls.item!.name}
+                      {ls.item.name}
                     </button>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       {cat && (
@@ -193,7 +197,7 @@ export default function LocationDetailPanel({
                       ${level === 'critical' ? 'text-destructive' : level === 'low' ? 'text-warning' : 'text-foreground'}`}>
                       {ls.quantity}
                     </div>
-                    <div className="text-xs text-muted-foreground">{ls.item!.unit}</div>
+                    <div className="text-xs text-muted-foreground">{ls.item.unit}</div>
                   </div>
                 </div>
 

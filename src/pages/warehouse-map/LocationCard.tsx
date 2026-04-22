@@ -1,55 +1,47 @@
+import { memo } from 'react';
 import Icon from '@/components/ui/icon';
 import { AppState, Location } from '@/data/store';
 import { getStockLevel, stockDotColor } from './WarehouseMapHelpers';
+import { useLocationStocks, computeWorstLevel } from './useLocationStocks';
 
 type Props = {
   location: Location;
   state: AppState;
   isSelected: boolean;
   isDragOver: boolean;
-  onSelect: () => void;
-  onDragOver: (e: React.DragEvent) => void;
+  /** Стабильные колбэки из useCallback — location.id передаётся параметром.
+   *  Так React.memo осмысленно ловит повторные рендеры родителя. */
+  onSelect: (locationId: string) => void;
+  onDragOver: (e: React.DragEvent, locationId: string) => void;
   onDragLeave: () => void;
-  onDrop: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent, locationId: string) => void;
   onItemDragStart: (e: React.DragEvent, itemId: string, fromLocationId: string) => void;
   color: string;
   search: string;
   categoryFilter: string;
 };
 
-export default function LocationCard({
+function LocationCardImpl({
   location, state, isSelected, isDragOver,
   onSelect, onDragOver, onDragLeave, onDrop, onItemDragStart,
   color, search, categoryFilter,
 }: Props) {
-  const locStocks = (state.locationStocks || [])
-    .filter(ls => ls.locationId === location.id && ls.quantity > 0);
-
-  const itemsHere = locStocks
-    .map(ls => ({ ...ls, item: state.items.find(i => i.id === ls.itemId) }))
-    .filter(ls => ls.item)
-    .filter(ls => {
-      if (categoryFilter !== 'all' && ls.item!.categoryId !== categoryFilter) return false;
-      if (search && !ls.item!.name.toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
-    });
-
-  const worstLevel = itemsHere.reduce<'ok' | 'low' | 'critical'>((worst, ls) => {
-    const lvl = getStockLevel(ls.quantity, ls.item!.lowStockThreshold);
-    if (lvl === 'critical') return 'critical';
-    if (lvl === 'low' && worst !== 'critical') return 'low';
-    return worst;
-  }, 'ok');
+  const locId = location.id;
+  const handleSelect = () => onSelect(locId);
+  const handleDragOver = (e: React.DragEvent) => onDragOver(e, locId);
+  const handleDrop = (e: React.DragEvent) => onDrop(e, locId);
+  const itemsHere = useLocationStocks(state, location.id, { search, categoryFilter });
+  const worstLevel = computeWorstLevel(itemsHere);
 
   const hasHighlight = search || categoryFilter !== 'all';
   const dimmed = hasHighlight && itemsHere.length === 0;
 
   return (
     <div
-      onDragOver={onDragOver}
+      onDragOver={handleDragOver}
       onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      onClick={onSelect}
+      onDrop={handleDrop}
+      onClick={handleSelect}
       className={`relative rounded-xl border-2 cursor-pointer transition-all duration-150 select-none overflow-hidden
         ${isSelected ? 'border-primary shadow-card-hover' : isDragOver ? 'border-primary/60 bg-accent/30' : 'border-border hover:border-primary/40 hover:shadow-card'}
         ${dimmed ? 'opacity-35' : ''}
@@ -81,7 +73,7 @@ export default function LocationCard({
         ) : (
           <div className="space-y-1">
             {itemsHere.slice(0, 4).map(ls => {
-              const level = getStockLevel(ls.quantity, ls.item!.lowStockThreshold);
+              const level = getStockLevel(ls.quantity, ls.item.lowStockThreshold);
               return (
                 <div
                   key={ls.itemId}
@@ -89,14 +81,14 @@ export default function LocationCard({
                   onDragStart={e => { e.stopPropagation(); onItemDragStart(e, ls.itemId, location.id); }}
                   onClick={e => e.stopPropagation()}
                   className="flex items-center gap-1.5 cursor-grab active:cursor-grabbing group/item"
-                  title={`${ls.item!.name} — перетащите для перемещения`}
+                  title={`${ls.item.name} — перетащите для перемещения`}
                 >
                   <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${stockDotColor(level)}`} />
-                  <span className="text-[10px] text-foreground flex-1 truncate leading-tight">{ls.item!.name}</span>
+                  <span className="text-[10px] text-foreground flex-1 truncate leading-tight">{ls.item.name}</span>
                   <span className={`text-[10px] font-bold tabular-nums shrink-0
                     ${level === 'critical' ? 'text-destructive' : level === 'low' ? 'text-warning' : 'text-muted-foreground'}`}>
                     {ls.quantity}
-                    <span className="font-normal ml-0.5">{ls.item!.unit}</span>
+                    <span className="font-normal ml-0.5">{ls.item.unit}</span>
                   </span>
                 </div>
               );
@@ -114,3 +106,30 @@ export default function LocationCard({
     </div>
   );
 }
+
+/** Мемоизация карточки локации.
+ *  Самая «дорогая» операция здесь — useLocationStocks внутри. Без memo карточка
+ *  перерендеривается на любой чих в родителе (drag-hover, выбор другой локации).
+ *  Сравниваем по ссылкам на слайсы state, от которых реально зависит вывод:
+ *  locationStocks, items, locations (для parent-check). Всё остальное —
+ *  примитивы и стабильные колбэки. */
+const LocationCard = memo(LocationCardImpl, (prev, next) => {
+  if (prev.location !== next.location) return false;
+  if (prev.isSelected !== next.isSelected) return false;
+  if (prev.isDragOver !== next.isDragOver) return false;
+  if (prev.color !== next.color) return false;
+  if (prev.search !== next.search) return false;
+  if (prev.categoryFilter !== next.categoryFilter) return false;
+  // Эти 2 слайса — реальные источники содержимого карточки.
+  if (prev.state.locationStocks !== next.state.locationStocks) return false;
+  if (prev.state.items !== next.state.items) return false;
+  // Колбэки ожидаются стабильными из родителя (обычно useCallback).
+  if (prev.onSelect !== next.onSelect) return false;
+  if (prev.onDragOver !== next.onDragOver) return false;
+  if (prev.onDragLeave !== next.onDragLeave) return false;
+  if (prev.onDrop !== next.onDrop) return false;
+  if (prev.onItemDragStart !== next.onItemDragStart) return false;
+  return true;
+});
+
+export default LocationCard;

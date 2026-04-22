@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { AppState, Location } from '@/data/store';
@@ -34,6 +35,11 @@ export default function WarehouseMapGrid({
   setEditLocation, setShowAddLocation, handleDeleteLocation,
   handleDragOver, handleDragLeave, handleDrop, handleItemDragStart,
 }: Props) {
+  // Стабильный toggle — не пересоздаётся, только читает актуальный selectedLocationId.
+  const handleCardSelect = useCallback((locationId: string) => {
+    setSelectedLocationId(selectedLocationId === locationId ? null : locationId);
+  }, [selectedLocationId, setSelectedLocationId]);
+
   if (state.locations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-border rounded-2xl">
@@ -120,10 +126,10 @@ export default function WarehouseMapGrid({
                   state={state}
                   isSelected={selectedLocationId === loc.id}
                   isDragOver={dragOverLocationId === loc.id}
-                  onSelect={() => setSelectedLocationId(selectedLocationId === loc.id ? null : loc.id)}
-                  onDragOver={e => handleDragOver(e, loc.id)}
+                  onSelect={handleCardSelect}
+                  onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
-                  onDrop={e => handleDrop(e, loc.id)}
+                  onDrop={handleDrop}
                   onItemDragStart={handleItemDragStart}
                   color={locationColors[loc.id]}
                   search={search}
