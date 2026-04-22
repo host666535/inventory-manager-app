@@ -26,7 +26,7 @@ import { realtime, RealtimeStatus } from '@/data/realtime';
 import RealtimeIndicator from '@/components/RealtimeIndicator';
 import OfflineOverlay from '@/components/OfflineOverlay';
 import ServerSetupScreen from '@/components/ServerSetupScreen';
-import { needsServerSetup, clearServerUrl } from '@/data/serverConfig';
+import { needsServerSetup, clearServerUrl, isMobileApp } from '@/data/serverConfig';
 
 function parseQRParams() {
   const params = new URLSearchParams(window.location.search);
@@ -50,7 +50,11 @@ const GUEST_USER: AuthUser = {
 export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(AUTH_DISABLED ? GUEST_USER : null);
   const [authLoading, setAuthLoading] = useState(!AUTH_DISABLED);
-  const [serverSetupNeeded, setServerSetupNeeded] = useState(needsServerSetup());
+  // ЖЁСТКОЕ правило: экран настройки сервера показываем ТОЛЬКО в мобильном APK.
+  // На ПК-вебе бэкенд всегда доступен относительно текущего хоста (/api/crud),
+  // и если он не отвечает — это экран «Нет подключения» (OfflineOverlay),
+  // а не первичная настройка.
+  const [serverSetupNeeded, setServerSetupNeeded] = useState(() => isMobileApp() && needsServerSetup());
 
   const handleServerConnected = useCallback(() => {
     setServerSetupNeeded(false);
@@ -59,7 +63,14 @@ export default function App() {
 
   const handleServerReset = useCallback(() => {
     clearServerUrl();
-    setServerSetupNeeded(true);
+    // То же правило: сбрасываем адрес и показываем экран настройки только в APK.
+    if (isMobileApp()) {
+      setServerSetupNeeded(true);
+    } else {
+      // На ПК-вебе после сброса просто перезагружаем страницу — фронт снова
+      // пойдёт на /api/crud того же хоста.
+      window.location.reload();
+    }
   }, []);
 
   useEffect(() => {
@@ -280,7 +291,7 @@ export default function App() {
     if (p !== 'assembly')  setQrOrderId(null);
   };
 
-  if (serverSetupNeeded) {
+  if (serverSetupNeeded && isMobileApp()) {
     return (
       <TooltipProvider>
         <Toaster position="top-right" />

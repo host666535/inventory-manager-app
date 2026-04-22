@@ -160,14 +160,17 @@ export async function pingServer(url: string, timeoutMs = 6000): Promise<{ ok: b
         hint: 'Проверь, что сервер запущен и телефон в той же Wi-Fi сети.',
       };
     }
-    const msg = err?.message || '';
-    if (/Failed to fetch|NetworkError|Network request failed/i.test(msg)) {
+    // TypeError от fetch = сетевая ошибка (любая: Failed to fetch / NetworkError / Network request failed / ERR_CLEARTEXT_NOT_PERMITTED и т.п.).
+    const isNetworkError =
+      err?.name === 'TypeError' ||
+      /Failed to fetch|NetworkError|Network request failed|cleartext|ERR_/i.test(err?.message || '');
+    if (isNetworkError) {
       return {
         ok: false,
         error: 'Сервер не отвечает',
-        hint: 'Возможные причины: 1) неверный IP или порт; 2) сервер не запущен; 3) телефон не в той же Wi-Fi сети; 4) брандмауэр блокирует порт.',
+        hint: 'Возможные причины: 1) неверный IP или порт; 2) сервер не запущен; 3) устройство не в той же Wi-Fi сети; 4) брандмауэр блокирует порт 3000.',
       };
     }
-    return { ok: false, error: msg || 'Не удалось подключиться' };
+    return { ok: false, error: err?.message || 'Не удалось подключиться' };
   }
 }
