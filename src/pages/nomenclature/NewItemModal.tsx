@@ -51,12 +51,19 @@ export default function NewItemModal({ state, onStateChange, onClose }: {
     let next = { ...state, items: [...state.items, newItem] };
     const initQty = parseInt(qty) || 0;
     const locId = newItem.locationId;
-    if (initQty > 0 && locId) {
-      next = updateLocationStock(next, newItem.id, locId, initQty);
-    }
     const whId = warehouseId || state.locations.find(l => l.id === locId)?.warehouseId || '';
-    if (initQty > 0 && whId) {
-      next = updateWarehouseStock(next, newItem.id, whId, initQty);
+    if (initQty > 0) {
+      if (locId) {
+        // updateLocationStock сам поднимет warehouseStocks до суммы по полкам —
+        // отдельно updateWarehouseStock вызывать НЕЛЬЗЯ, иначе будет двойной учёт.
+        next = updateLocationStock(next, newItem.id, locId, initQty);
+      } else if (whId) {
+        // Без локации — кладём «общим складом».
+        next = updateWarehouseStock(next, newItem.id, whId, initQty);
+      } else {
+        // Совсем без склада/локации — обновляем только поле item.quantity.
+        next = { ...next, items: next.items.map(i => i.id === newItem.id ? { ...i, quantity: initQty } : i) };
+      }
     }
     onStateChange(next);
     const lsArr = (next.locationStocks || []).filter(ls => ls.itemId === newItem.id);

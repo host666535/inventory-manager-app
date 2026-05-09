@@ -51,7 +51,9 @@ export function AddItemToLocationModal({
         .filter(ls => ls.itemId === itemId && whLocationIds.has(ls.locationId))
         .reduce((s, ls) => s + ls.quantity, 0)
     : 0;
-  const freeToPlace = Math.max(0, whAvailable - distributedOnShelf + alreadyHere);
+  // Свободно = что на складе минус то, что уже разложено по полкам.
+  // alreadyHere УЖЕ входит в distributedOnShelf — повторно прибавлять нельзя.
+  const freeToPlace = Math.max(0, whAvailable - distributedOnShelf);
 
   const qtyNum = parseInt(qty) || 0;
   const alreadyPlaced = alreadyHere > 0;
@@ -112,7 +114,7 @@ export function AddItemToLocationModal({
                   const cat = state.categories.find(c => c.id === ws.item!.categoryId);
                   const onShelf = (state.locationStocks || []).find(ls => ls.itemId === ws.itemId && ls.locationId === locationId)?.quantity || 0;
                   const distributed = (state.locationStocks || []).filter(ls => ls.itemId === ws.itemId && whLocationIds.has(ls.locationId)).reduce((s, ls) => s + ls.quantity, 0);
-                  const free = Math.max(0, ws.quantity - distributed + onShelf);
+                  const free = Math.max(0, ws.quantity - distributed);
                   const placedHere = onShelf > 0;
                   const disabled = free <= 0 || placedHere;
                   return (
