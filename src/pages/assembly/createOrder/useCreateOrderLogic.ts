@@ -87,13 +87,18 @@ export function useCreateOrderLogic({
       const item = state.items.find(i => i.id === ln.itemId);
       if (!item) return null;
       const qty = parseInt(ln.qty) || 0;
-      const freeQty = getFreeQty(state, ln.itemId);
-      if (item.quantity === 0) return { type: 'error' as const, msg: 'Нет в наличии' };
-      if (qty > item.quantity) return { type: 'error' as const, msg: `На складе только ${item.quantity} ${item.unit}` };
-      if (qty > freeQty && freeQty < qty) return { type: 'warn' as const, msg: `Свободно ${freeQty} ${item.unit} (остальное зарезервировано)` };
+      // Если выбран склад — считаем по остатку на нём, иначе по всему товару.
+      const stockQty = selectedWarehouseId
+        ? (state.warehouseStocks || []).find(ws => ws.warehouseId === selectedWarehouseId && ws.itemId === item.id)?.quantity ?? 0
+        : item.quantity;
+      // При редактировании текущая заявка не должна резервировать сама у себя.
+      const freeQty = getFreeQty(state, ln.itemId, editOrder?.id);
+      if (stockQty === 0) return { type: 'error' as const, msg: selectedWarehouseId ? 'Нет на этом складе' : 'Нет в наличии' };
+      if (qty > stockQty) return { type: 'error' as const, msg: `${selectedWarehouseId ? 'На этом складе' : 'На складе'} только ${stockQty} ${item.unit}` };
+      if (qty > freeQty) return { type: 'warn' as const, msg: `Свободно ${freeQty} ${item.unit} (остальное зарезервировано)` };
       if (item.quantity <= item.lowStockThreshold) return { type: 'info' as const, msg: `Низкий остаток (${item.quantity} ${item.unit})` };
       return null;
-    }), [lines, state]);
+    }), [lines, state, selectedWarehouseId, editOrder?.id]);
 
   const conflicts = useMemo((): ConflictInfo[] => {
     const result: ConflictInfo[] = [];
@@ -104,10 +109,13 @@ export function useCreateOrderLogic({
       const item = state.items.find(i => i.id === ln.itemId);
       if (!item) continue;
       const qty = parseInt(ln.qty) || 0;
-      const reserved = getReservedQty(state, ln.itemId);
-      if (qty + reserved > item.quantity) {
+      const reserved = getReservedQty(state, ln.itemId, editOrder?.id);
+      const stockQty = selectedWarehouseId
+        ? (state.warehouseStocks || []).find(ws => ws.warehouseId === selectedWarehouseId && ws.itemId === item.id)?.quantity ?? 0
+        : item.quantity;
+      if (qty + reserved > stockQty) {
         const conflictingOrders = state.workOrders
-          .filter(o => ['active', 'draft', 'pending_stock'].includes(o.status))
+          .filter(o => ['active', 'draft', 'pending_stock'].includes(o.status) && o.id !== editOrder?.id)
           .flatMap(o => o.items.filter(oi => oi.itemId === ln.itemId && oi.status !== 'done').map(oi => ({
             number: o.number, title: o.title, qty: oi.requiredQty - oi.pickedQty,
           })));
@@ -115,14 +123,14 @@ export function useCreateOrderLogic({
           itemId: ln.itemId,
           itemName: item.name,
           unit: item.unit,
-          available: item.quantity,
+          available: stockQty,
           requested: qty,
           conflictingOrders,
         });
       }
     }
     return result;
-  }, [validLines, state]);
+  }, [validLines, state, selectedWarehouseId, editOrder?.id]);
 
   const canCreate = validLines.length > 0 && duplicates.size === 0;
 

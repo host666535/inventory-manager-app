@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import {
@@ -21,6 +21,34 @@ export function OrderDetail({ order, state, onStateChange, onBack }: {
   const [showCloseWarning, setShowCloseWarning] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showReassembleConfirm, setShowReassembleConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Локальные значения текстовых полей. Нужны, чтобы пользовательский ввод не
+  // затирался при синхронизации с сервером (polling раз в 2 секунды
+  // перезагружает state, и без локального буфера буквы могли пропадать).
+  const [localFields, setLocalFields] = useState({
+    recipientName: order.recipientName || '',
+    requesterRank: order.requesterRank || '',
+    requesterName: order.requesterName || '',
+    receiverRank: order.receiverRank || '',
+    receiverName: order.receiverName || '',
+  });
+  // Флаг — пользователь редактирует, не перетирай данными с сервера
+  const editingRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Когда заявка приходит с сервера и пользователь НЕ печатает —
+  // подтягиваем актуальные значения в локальные поля.
+  useEffect(() => {
+    if (editingRef.current) return;
+    setLocalFields({
+      recipientName: order.recipientName || '',
+      requesterRank: order.requesterRank || '',
+      requesterName: order.requesterName || '',
+      receiverRank: order.receiverRank || '',
+      receiverName: order.receiverName || '',
+    });
+  }, [order.recipientName, order.requesterRank, order.requesterName, order.receiverRank, order.receiverName]);
 
   const doneCount = order.items.filter(i => i.status === 'done').length;
   const progress = order.items.length > 0 ? Math.round((doneCount / order.items.length) * 100) : 0;
@@ -36,6 +64,36 @@ export function OrderDetail({ order, state, onStateChange, onBack }: {
     const next = { ...state, workOrders: state.workOrders.map(o => o.id === order.id ? updated : o) };
     onStateChange(next);
     crudAction('upsert_work_order', { workOrder: updated, orderItems: updated.items });
+  };
+
+  // Изменение текстового поля: моментально обновляем локальный state,
+  // а отправку на сервер делаем с задержкой 600мс (debounce). Это исключает
+  // гонку с polling-синхронизацией и съеденные буквы при быстром вводе.
+  const handleTextField = (key: keyof typeof localFields, value: string) => {
+    editingRef.current = true;
+    setLocalFields(prev => ({ ...prev, [key]: value }));
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      patchOrder({ [key]: value || undefined } as Partial<WorkOrder>);
+      editingRef.current = false;
+    }, 600);
+  };
+
+  // При размонтировании — досохраняем то, что не успело улететь
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, []);
+
+  const handleDelete = () => {
+    const next = {
+      ...state,
+      workOrders: state.workOrders.filter(o => o.id !== order.id),
+    };
+    onStateChange(next);
+    crudAction('delete_work_order', { id: order.id });
+    onBack();
   };
 
   const handleClose = () => {
@@ -148,8 +206,8 @@ export function OrderDetail({ order, state, onStateChange, onBack }: {
         <div className="space-y-1.5">
           <Label className="text-xs">Структурное подразделение — получатель</Label>
           <Input
-            value={liveOrder.recipientName || ''}
-            onChange={e => patchOrder({ recipientName: e.target.value })}
+            value={localFields.recipientName}
+            onChange={e => handleTextField('recipientName', e.target.value)}
             placeholder="Напр.: Отдел снабжения"
           />
         </div>
@@ -157,16 +215,16 @@ export function OrderDetail({ order, state, onStateChange, onBack }: {
           <div className="space-y-1.5">
             <Label className="text-xs">Затребовал — звание / должность</Label>
             <Input
-              value={liveOrder.requesterRank || ''}
-              onChange={e => patchOrder({ requesterRank: e.target.value })}
+              value={localFields.requesterRank}
+              onChange={e => handleTextField('requesterRank', e.target.value)}
               placeholder="Напр.: командир взвода"
             />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Затребовал — ФИО</Label>
             <Input
-              value={liveOrder.requesterName || ''}
-              onChange={e => patchOrder({ requesterName: e.target.value })}
+              value={localFields.requesterName}
+              onChange={e => handleTextField('requesterName', e.target.value)}
               placeholder="Сидоров С.С."
             />
           </div>
@@ -175,16 +233,16 @@ export function OrderDetail({ order, state, onStateChange, onBack }: {
           <div className="space-y-1.5">
             <Label className="text-xs">Получил — звание / должность</Label>
             <Input
-              value={liveOrder.receiverRank || ''}
-              onChange={e => patchOrder({ receiverRank: e.target.value })}
+              value={localFields.receiverRank}
+              onChange={e => handleTextField('receiverRank', e.target.value)}
               placeholder="Напр.: кладовщик"
             />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Получил — ФИО (расшифровка)</Label>
             <Input
-              value={liveOrder.receiverName || ''}
-              onChange={e => patchOrder({ receiverName: e.target.value })}
+              value={localFields.receiverName}
+              onChange={e => handleTextField('receiverName', e.target.value)}
               placeholder="Иванов И.И."
             />
           </div>
@@ -362,6 +420,19 @@ export function OrderDetail({ order, state, onStateChange, onBack }: {
         )}
       </div>
 
+      {/* Удаление заявки — доступно для черновиков и закрытых */}
+      {(liveOrder.status === 'draft' || liveOrder.status === 'closed' || liveOrder.status === 'pending_stock') && (
+        <div className="pt-2 border-t border-border/50">
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="flex items-center gap-1.5 text-xs text-destructive/80 hover:text-destructive transition-colors"
+          >
+            <Icon name="Trash2" size={13} />
+            Удалить заявку
+          </button>
+        </div>
+      )}
+
       {pickingItem && <PickItemModal state={state} onStateChange={onStateChange} order={liveOrder} orderItem={pickingItem} onClose={() => setPickingItem(null)} />}
       {showCloseWarning && (
         <CloseWarningModal
@@ -370,6 +441,33 @@ export function OrderDetail({ order, state, onStateChange, onBack }: {
           onConfirm={() => { setShowCloseWarning(false); changeStatus('closed'); }}
           onCancel={() => setShowCloseWarning(false)}
         />
+      )}
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-card rounded-2xl border border-border shadow-2xl max-w-md w-full p-5 animate-scale-in">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-destructive/15 text-destructive flex items-center justify-center shrink-0">
+                <Icon name="Trash2" size={18} />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-base">Удалить заявку?</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Заявка <b className="text-foreground">№{liveOrder.number}</b> будет удалена безвозвратно. История операций по уже выданным товарам останется.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} className="flex-1">Отмена</Button>
+              <Button
+                onClick={() => { setShowDeleteConfirm(false); handleDelete(); }}
+                className="flex-1 bg-destructive hover:bg-destructive/90 text-destructive-foreground gap-1.5"
+              >
+                <Icon name="Trash2" size={14} />Удалить
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showReassembleConfirm && (
