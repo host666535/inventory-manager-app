@@ -49,21 +49,27 @@ export function OrderImportModal({ state, onStateChange, onClose }: Props) {
     }
 
     setImporting(true);
-    const { nextState, orders, newItems, newPartners } = buildOrdersFromRows(
+    const { nextState, orders, newItems, newPartners, operations } = buildOrdersFromRows(
       state, parsed.rows, warehouseId, state.currentUser,
     );
 
     onStateChange(nextState);
 
     const tasks: Promise<boolean>[] = [];
-    for (const o of orders) tasks.push(crudAction('upsert_work_order', { workOrder: o, orderItems: o.items }));
     for (const it of newItems) tasks.push(crudAction('upsert_item', { item: it }));
     for (const p of newPartners) tasks.push(crudAction('upsert_partner', { partner: p }));
+    for (const o of orders) tasks.push(crudAction('upsert_work_order', { workOrder: o, orderItems: o.items }));
+    for (const op of operations) {
+      const item = nextState.items.find(i => i.id === op.itemId);
+      const locationStocks = (nextState.locationStocks || []).filter(ls => ls.itemId === op.itemId);
+      const warehouseStocks = (nextState.warehouseStocks || []).filter(ws => ws.itemId === op.itemId);
+      tasks.push(crudAction('upsert_operation', { operation: op, item, locationStocks, warehouseStocks }));
+    }
 
     await Promise.all(tasks);
     setImporting(false);
 
-    toast.success(`Загружено заявок: ${orders.length} (позиций: ${parsed.validCount})`);
+    toast.success(`Импортировано выдач: ${orders.length} · позиций списано: ${parsed.validCount}`);
     onClose();
   };
 

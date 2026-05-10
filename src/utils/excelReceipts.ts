@@ -1,7 +1,8 @@
 import * as XLSX from 'xlsx';
 import {
   AppState, Receipt, ReceiptLine, ReceiptCustomField,
-  Item, Partner, generateId,
+  Item, Partner, Operation, generateId,
+  updateWarehouseStock,
 } from '@/data/store';
 
 // Фиксированный порядок колонок (как в макете пользователя).
@@ -268,10 +269,12 @@ export function buildReceiptsFromRows(
   receipts: Receipt[];
   newItems: Item[];
   newPartners: Partner[];
+  operations: Operation[];
 } {
   let next = { ...state };
   const newItems: Item[] = [];
   const newPartners: Partner[] = [];
+  const operations: Operation[] = [];
 
   let counter = next.receiptCounter ?? 1;
 
@@ -345,12 +348,13 @@ export function buildReceiptsFromRows(
         itemId = ni.id;
       }
 
+      const qty = Math.round(row.qty);
       lines.push({
         id: generateId(),
         itemId,
         itemName: row.itemName,
-        qty: Math.round(row.qty),
-        confirmedQty: 0,
+        qty,
+        confirmedQty: qty,         // импорт = сразу подтверждено
         locationId: '',
         unit,
         isNew: !existingItem,
@@ -370,18 +374,54 @@ export function buildReceiptsFromRows(
       customFields.push({ key: k, value: v });
     }
 
+    const nowIso = new Date().toISOString();
+    const wh = (next.warehouses || []).find(w => w.id === warehouseId);
+    const whName = wh?.name || 'Склад';
+
+    // ─── Зачисляем остатки на склад сразу при импорте ──────────────────────
+    for (const line of lines) {
+      const qty = line.confirmedQty || 0;
+      if (qty <= 0) continue;
+
+      if (warehouseId) {
+        next = updateWarehouseStock(next, line.itemId, warehouseId, qty);
+      } else {
+        next = {
+          ...next,
+          items: next.items.map(i => i.id === line.itemId
+            ? { ...i, quantity: i.quantity + qty }
+            : i),
+        };
+      }
+
+      const op: Operation = {
+        id: generateId(),
+        itemId: line.itemId,
+        type: 'in',
+        quantity: qty,
+        comment: `Импорт прихода ПРХ-${String(counter).padStart(4, '0')}`,
+        from: supplierName || 'Поставщик',
+        to: whName,
+        performedBy: currentUser,
+        date: nowIso,
+        warehouseId: warehouseId || undefined,
+      };
+      operations.push(op);
+    }
+
     const receipt: Receipt = {
       id: generateId(),
       number: `ПРХ-${String(counter).padStart(4, '0')}`,
-      status: 'pending',
+      status: 'posted',                 // сразу оприходовано (без 2 этапов)
       supplierId,
       supplierName,
       warehouseId,
-      date: first.arrivalDate || new Date().toISOString(),
+      date: first.arrivalDate || nowIso,
       createdBy: currentUser,
       lines,
       customFields,
       scanHistory: [],
+      postedAt: nowIso,
     };
     counter += 1;
     receipts.push(receipt);
@@ -390,8 +430,9 @@ export function buildReceiptsFromRows(
   next = {
     ...next,
     receipts: [...receipts, ...(next.receipts || [])],
+    operations: [...operations, ...(next.operations || [])],
     receiptCounter: counter,
   };
 
-  return { nextState: next, receipts, newItems, newPartners };
+  return { nextState: next, receipts, newItems, newPartners, operations };
 }

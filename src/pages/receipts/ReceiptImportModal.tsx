@@ -49,24 +49,30 @@ export function ReceiptImportModal({ state, onStateChange, onClose }: Props) {
     }
 
     setImporting(true);
-    const { nextState, receipts, newItems, newPartners } = buildReceiptsFromRows(
+    const { nextState, receipts, newItems, newPartners, operations } = buildReceiptsFromRows(
       state, parsed.rows, warehouseId, state.currentUser,
     );
 
     onStateChange(nextState);
 
     const tasks: Promise<boolean>[] = [];
+    for (const it of newItems) tasks.push(crudAction('upsert_item', { item: it }));
+    for (const p of newPartners) tasks.push(crudAction('upsert_partner', { partner: p }));
     for (const r of receipts) {
       tasks.push(crudAction('upsert_receipt', { receipt: r, receiptLines: r.lines }));
     }
-    for (const it of newItems) tasks.push(crudAction('upsert_item', { item: it }));
-    for (const p of newPartners) tasks.push(crudAction('upsert_partner', { partner: p }));
+    for (const op of operations) {
+      const item = nextState.items.find(i => i.id === op.itemId);
+      const locationStocks = (nextState.locationStocks || []).filter(ls => ls.itemId === op.itemId);
+      const warehouseStocks = (nextState.warehouseStocks || []).filter(ws => ws.itemId === op.itemId);
+      tasks.push(crudAction('upsert_operation', { operation: op, item, locationStocks, warehouseStocks }));
+    }
     tasks.push(crudAction('update_setting', { key: 'receiptCounter', value: String(nextState.receiptCounter) }));
 
     await Promise.all(tasks);
     setImporting(false);
 
-    toast.success(`Загружено приходов: ${receipts.length} (позиций: ${parsed.validCount})`);
+    toast.success(`Импортировано приходов: ${receipts.length} · позиций оприходовано: ${parsed.validCount}`);
     onClose();
   };
 

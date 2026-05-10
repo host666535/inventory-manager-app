@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import {
-  AppState, WorkOrder, OrderItem, Item, Partner, generateId,
+  AppState, WorkOrder, OrderItem, Item, Partner, Operation, generateId,
+  updateLocationStock, updateWarehouseStock,
 } from '@/data/store';
 
 // Колонки в строгом порядке (по макету пользователя).
@@ -76,8 +77,8 @@ export function exportOrdersToExcel(
       'Объединение': order.unitGroup || '',
       'Соединение': order.unitFormation || order.recipientName || '',
       'В/Ч': order.unitNumber || '',
-      'звание': order.receiverRank || '',
-      'ФИО согласно выписки из приказа': order.receiverName || '',
+      'звание': order.receiverRank || order.requesterRank || '',
+      'ФИО согласно выписки из приказа': order.receiverName || order.requesterName || '',
       'Склад': whName,
       'Номер документа': order.number,
     };
@@ -256,10 +257,12 @@ export function buildOrdersFromRows(
   orders: WorkOrder[];
   newItems: Item[];
   newPartners: Partner[];
+  operations: Operation[];
 } {
   let next = { ...state };
   const newItems: Item[] = [];
   const newPartners: Partner[] = [];
+  const operations: Operation[] = [];
 
   // Группировка
   const groups = new Map<string, ParsedOrderRow[]>();
@@ -335,34 +338,97 @@ export function buildOrdersFromRows(
         itemId = ni.id;
       }
 
+      const requiredQty = Math.round(row.qty);
       items.push({
         id: generateId(),
         itemId,
-        requiredQty: Math.round(row.qty),
-        pickedQty: 0,
-        status: 'pending',
+        requiredQty,
+        pickedQty: requiredQty,           // импорт = факт выдачи
+        status: 'done',
         serialNumber: row.serialNumber || undefined,
       });
     }
 
     const orderNumber = first.docNumber || `ЗС-${String(orders.length + 1).padStart(3, '0')}`;
+    const orderId = generateId();
+    const nowIso = new Date().toISOString();
+
+    // ─── Списываем товары со склада сразу при импорте ──────────────────────
+    const wh = (next.warehouses || []).find(w => w.id === warehouseId);
+    const whName = wh?.name || 'Склад';
+
+    for (const oi of items) {
+      const qty = oi.requiredQty;
+      if (qty <= 0) continue;
+
+      // Пытаемся найти локацию с этим товаром в выбранном складе
+      const candidateLocations = (next.locationStocks || [])
+        .filter(ls => ls.itemId === oi.itemId && ls.quantity > 0)
+        .filter(ls => {
+          const loc = next.locations.find(l => l.id === ls.locationId);
+          return !loc?.warehouseId || loc.warehouseId === warehouseId;
+        })
+        .sort((a, b) => b.quantity - a.quantity);
+
+      let remaining = qty;
+      let firstLocationId: string | undefined;
+      for (const ls of candidateLocations) {
+        if (remaining <= 0) break;
+        const take = Math.min(remaining, ls.quantity);
+        next = updateLocationStock(next, oi.itemId, ls.locationId, -take);
+        if (!firstLocationId) firstLocationId = ls.locationId;
+        remaining -= take;
+      }
+
+      // Снимаем остаток со склада
+      next = updateWarehouseStock(next, oi.itemId, warehouseId, -qty);
+
+      // Если нет привязки к складу — корректируем общий item.quantity
+      if (!warehouseId) {
+        next = {
+          ...next,
+          items: next.items.map(i => i.id === oi.itemId
+            ? { ...i, quantity: Math.max(0, i.quantity - qty) }
+            : i),
+        };
+      }
+
+      const op: Operation = {
+        id: generateId(),
+        itemId: oi.itemId,
+        type: 'out',
+        quantity: qty,
+        comment: `Импорт выдачи ${orderNumber}`,
+        from: whName,
+        to: recipientName || first.fullName || 'Получатель',
+        performedBy: currentUser,
+        date: nowIso,
+        orderId,
+        locationId: firstLocationId,
+        warehouseId: warehouseId || undefined,
+      };
+      operations.push(op);
+    }
 
     const order: WorkOrder = {
-      id: generateId(),
+      id: orderId,
       number: orderNumber,
       title: `Выдача ${recipientName || first.fullName || ''}`.trim(),
-      status: 'draft',
+      status: 'closed',                   // сразу закрыта (без 2 этапов)
       createdBy: currentUser,
       warehouseId,
       recipientId,
       recipientName: recipientName || undefined,
       receiverRank: first.rank || undefined,
       receiverName: first.fullName || undefined,
+      // Дублируем ФИО/звание в «Затребовал», т.к. в таблице это одно поле
+      requesterRank: first.rank || undefined,
+      requesterName: first.fullName || undefined,
       unitGroup: first.unitGroup || undefined,
       unitFormation: first.unitFormation || undefined,
       unitNumber: first.unitNumber || undefined,
-      createdAt: first.date || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: first.date || nowIso,
+      updatedAt: nowIso,
       items,
     };
     orders.push(order);
@@ -371,7 +437,8 @@ export function buildOrdersFromRows(
   next = {
     ...next,
     workOrders: [...orders, ...(next.workOrders || [])],
+    operations: [...operations, ...(next.operations || [])],
   };
 
-  return { nextState: next, orders, newItems, newPartners };
+  return { nextState: next, orders, newItems, newPartners, operations };
 }
