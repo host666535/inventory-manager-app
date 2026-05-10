@@ -131,6 +131,7 @@ export type OrderItem = {
   requiredQty: number;
   pickedQty: number;
   status: OrderItemStatus;
+  serialNumber?: string;     // Серийный номер позиции (б/н или конкретный S/N)
 };
 
 export type WorkOrder = {
@@ -148,6 +149,10 @@ export type WorkOrder = {
   issuerName?: string;
   requesterRank?: string;
   requesterName?: string;
+  // Военные реквизиты получателя (используются в выгрузках/импорте Excel)
+  unitGroup?: string;        // Объединение (например, ГМП, ЧНП)
+  unitFormation?: string;    // Соединение (61 обрмп)
+  unitNumber?: string;       // Номер войсковой части (38643)
   createdAt: string;
   updatedAt: string;
   items: OrderItem[];

@@ -7,6 +7,9 @@ import {
 } from '@/data/store';
 import { CreateOrderModal } from './assembly/CreateOrderModal';
 import { OrderDetail } from './assembly/OrderDetail';
+import { OrderImportModal } from './assembly/OrderImportModal';
+import { exportOrdersToExcel } from '@/utils/excelOrders';
+import { toast } from 'sonner';
 
 type Props = {
   state: AppState;
@@ -16,8 +19,25 @@ type Props = {
 export default function AssemblyPage({ state, onStateChange, initialOrderId }: Props & { initialOrderId?: string | null }) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(initialOrderId ?? null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editOrderId, setEditOrderId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
+
+  const handleExport = () => {
+    const list = (state.workOrders || [])
+      .filter(o => statusFilter === 'all' || o.status === statusFilter);
+    if (list.length === 0) {
+      toast.warning('Нет выдач для экспорта');
+      return;
+    }
+    try {
+      exportOrdersToExcel(list, state);
+      toast.success(`Экспортировано выдач: ${list.length}`);
+    } catch (e) {
+      console.error(e);
+      toast.error('Не удалось экспортировать');
+    }
+  };
 
   const editOrder = editOrderId ? state.workOrders.find(o => o.id === editOrderId) || null : null;
 
@@ -56,10 +76,30 @@ export default function AssemblyPage({ state, onStateChange, initialOrderId }: P
           <h1 className="text-2xl font-bold">Сборочные заявки</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{orders.length} заявок · {counts.active} в работе</p>
         </div>
-        <Button onClick={() => setShowCreate(true)} className="flex items-center gap-2">
-          <Icon name="Plus" size={16} />
-          Создать заявку
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-1.5"
+            title="Загрузить выдачи из Excel"
+          >
+            <Icon name="Upload" size={15} />
+            Импорт
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            className="flex items-center gap-1.5"
+            title="Скачать выдачи в Excel"
+          >
+            <Icon name="Download" size={15} />
+            Экспорт
+          </Button>
+          <Button onClick={() => setShowCreate(true)} className="flex items-center gap-2">
+            <Icon name="Plus" size={16} />
+            Создать заявку
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -181,6 +221,7 @@ export default function AssemblyPage({ state, onStateChange, initialOrderId }: P
 
       {showCreate && <CreateOrderModal state={state} onStateChange={onStateChange} onClose={() => setShowCreate(false)} />}
       {editOrder && <CreateOrderModal state={state} onStateChange={onStateChange} onClose={() => setEditOrderId(null)} editOrder={editOrder} />}
+      {showImport && <OrderImportModal state={state} onStateChange={onStateChange} onClose={() => setShowImport(false)} />}
     </div>
   );
 }
