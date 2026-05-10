@@ -158,14 +158,20 @@ TABLE_COLUMNS = {
                     "warehouse_id", "scanned_codes"],
     "location_stocks": ["item_id", "location_id", "quantity"],
     "warehouse_stocks": ["item_id", "warehouse_id", "quantity"],
-    "partners": ["id", "name", "type", "contact", "note", "created_at"],
+    "partners": ["id", "name", "type", "contact", "note", "created_at",
+                  "rank", "full_name", "department"],
     "barcodes": ["id", "item_id", "code", "format", "label", "created_at"],
-    "work_orders": ["id", "number", "title", "status", "created_by", "recipient_id",
-                     "recipient_name", "created_at", "updated_at", "comment"],
-    "order_items": ["id", "order_id", "item_id", "required_qty", "picked_qty", "status"],
+    "work_orders": ["id", "number", "title", "status", "created_by", "warehouse_id",
+                     "recipient_id", "recipient_name", "created_at", "updated_at", "comment",
+                     "receiver_rank", "receiver_name",
+                     "requester_rank", "requester_name",
+                     "issuer_rank", "issuer_name",
+                     "unit_group", "unit_formation", "unit_number"],
+    "order_items": ["id", "order_id", "item_id", "required_qty", "picked_qty", "status",
+                     "serial_number"],
     "receipts": ["id", "number", "status", "supplier_id", "supplier_name", "warehouse_id",
                   "date", "created_by", "comment", "total_amount", "posted_at",
-                  "custom_fields", "scan_history", "photo_url"],
+                  "custom_fields", "scan_history", "photo_url", "attachments"],
     "receipt_lines": ["id", "receipt_id", "item_id", "item_name", "qty", "confirmed_qty",
                        "location_id", "price", "unit", "is_new"],
     "tech_docs": ["id", "item_id", "doc_number", "doc_date", "doc_type", "supplier",
@@ -641,6 +647,18 @@ def ensure_tables():
     cur.execute(f"ALTER TABLE {SCHEMA}.receipts ADD COLUMN IF NOT EXISTS photo_url TEXT")
     cur.execute(f"ALTER TABLE {SCHEMA}.tech_docs ADD COLUMN IF NOT EXISTS cover_url TEXT")
     cur.execute(f"ALTER TABLE {SCHEMA}.items ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'")
+    cur.execute(f"ALTER TABLE {SCHEMA}.receipts ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'")
+
+    # Поля для импорта/экспорта выдач (Excel)
+    for col in ("receiver_rank", "receiver_name",
+                "requester_rank", "requester_name",
+                "issuer_rank", "issuer_name",
+                "unit_group", "unit_formation", "unit_number",
+                "warehouse_id"):
+        cur.execute(f"ALTER TABLE {SCHEMA}.work_orders ADD COLUMN IF NOT EXISTS {col} TEXT")
+    cur.execute(f"ALTER TABLE {SCHEMA}.order_items ADD COLUMN IF NOT EXISTS serial_number TEXT")
+    for col in ("rank", "full_name", "department"):
+        cur.execute(f"ALTER TABLE {SCHEMA}.partners ADD COLUMN IF NOT EXISTS {col} TEXT")
 
     cur.execute(f"""
         INSERT INTO {SCHEMA}.app_settings (key, value) VALUES
