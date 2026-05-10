@@ -7,6 +7,9 @@ import { NewReceiptModal } from './receipts/ReceiptNewModal';
 import { ReceiptDetailModal } from './receipts/ReceiptDetailModal';
 import { ReceiptsList } from './receipts/ReceiptsList';
 import { ReceiptConfirmPage } from './receipts/ReceiptConfirmPage';
+import { ReceiptImportModal } from './receipts/ReceiptImportModal';
+import { exportReceiptsToExcel } from '@/utils/excelReceipts';
+import { toast } from 'sonner';
 
 type Props = {
   state: AppState;
@@ -23,6 +26,7 @@ const STATUS_FILTERS: { value: string; label: string }[] = [
 
 export default function ReceiptsPage({ state, onStateChange }: Props) {
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [confirmReceipt, setConfirmReceipt] = useState<Receipt | null>(null);
   const [search, setSearch] = useState('');
@@ -44,6 +48,21 @@ export default function ReceiptsPage({ state, onStateChange }: Props) {
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [receipts, search, statusFilter, supplierFilter]);
+
+  const handleExport = () => {
+    const list = filtered.length > 0 ? filtered : receipts;
+    if (list.length === 0) {
+      toast.warning('Нет приходов для экспорта');
+      return;
+    }
+    try {
+      exportReceiptsToExcel(list, state);
+      toast.success(`Экспортировано приходов: ${list.length}`);
+    } catch (e) {
+      console.error(e);
+      toast.error('Не удалось экспортировать');
+    }
+  };
 
   const totalLines = receipts.reduce((s, r) => s + r.lines.length, 0);
   const totalAmount = receipts.reduce((s, r) => s + (r.totalAmount || r.lines.reduce((ls, l) => ls + (l.price || 0) * l.qty, 0)), 0);
@@ -79,10 +98,30 @@ export default function ReceiptsPage({ state, onStateChange }: Props) {
             )}
           </p>
         </div>
-        <Button onClick={() => setShowCreate(true)} className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold">
-          <Icon name="PackagePlus" size={16} />
-          Новое оприходование
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-1.5"
+            title="Загрузить приходы из Excel"
+          >
+            <Icon name="Upload" size={15} />
+            Импорт
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            className="flex items-center gap-1.5"
+            title="Скачать приходы в Excel"
+          >
+            <Icon name="Download" size={15} />
+            Экспорт
+          </Button>
+          <Button onClick={() => setShowCreate(true)} className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold">
+            <Icon name="PackagePlus" size={16} />
+            Новое оприходование
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -187,6 +226,14 @@ export default function ReceiptsPage({ state, onStateChange }: Props) {
             setShowCreate(false);
             setConfirmReceipt(receipt);
           }}
+        />
+      )}
+
+      {showImport && (
+        <ReceiptImportModal
+          state={state}
+          onStateChange={onStateChange}
+          onClose={() => setShowImport(false)}
         />
       )}
 
