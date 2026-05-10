@@ -402,7 +402,7 @@ export function buildOrdersFromRows(
         from: whName,
         to: recipientName || first.fullName || 'Получатель',
         performedBy: currentUser,
-        date: nowIso,
+        date: first.date || nowIso,
         orderId,
         locationId: firstLocationId,
         warehouseId: warehouseId || undefined,
@@ -428,7 +428,7 @@ export function buildOrdersFromRows(
       unitFormation: first.unitFormation || undefined,
       unitNumber: first.unitNumber || undefined,
       createdAt: first.date || nowIso,
-      updatedAt: nowIso,
+      updatedAt: first.date || nowIso,
       items,
     };
     orders.push(order);

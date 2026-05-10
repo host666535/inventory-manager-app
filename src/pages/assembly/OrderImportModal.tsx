@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
-import { AppState, crudAction } from '@/data/store';
+import { AppState, crudAction, setCrudErrorHandler } from '@/data/store';
 import {
   parseOrdersExcel, buildOrdersFromRows, downloadOrderTemplate,
   OrderImportResult, ORDER_HEADERS,
@@ -55,21 +55,35 @@ export function OrderImportModal({ state, onStateChange, onClose }: Props) {
 
     onStateChange(nextState);
 
-    const tasks: Promise<boolean>[] = [];
-    for (const it of newItems) tasks.push(crudAction('upsert_item', { item: it }));
-    for (const p of newPartners) tasks.push(crudAction('upsert_partner', { partner: p }));
-    for (const o of orders) tasks.push(crudAction('upsert_work_order', { workOrder: o, orderItems: o.items }));
+    // На время импорта подавляем глобальный «откат» состояния — он перезагружает
+    // данные с сервера и стирает только что добавленные оптимистичные заявки.
+    // Ошибки соберём сами и покажем одним тостом.
+    setCrudErrorHandler(null);
+    let failed = 0;
+
+    const run = async (p: Promise<boolean>) => {
+      const ok = await p;
+      if (!ok) failed += 1;
+    };
+
+    // ПОРЯДОК ВАЖЕН: сначала справочники, потом заявки, потом операции.
+    for (const it of newItems) await run(crudAction('upsert_item', { item: it }));
+    for (const p of newPartners) await run(crudAction('upsert_partner', { partner: p }));
+    for (const o of orders) await run(crudAction('upsert_work_order', { workOrder: o, orderItems: o.items }));
     for (const op of operations) {
       const item = nextState.items.find(i => i.id === op.itemId);
       const locationStocks = (nextState.locationStocks || []).filter(ls => ls.itemId === op.itemId);
       const warehouseStocks = (nextState.warehouseStocks || []).filter(ws => ws.itemId === op.itemId);
-      tasks.push(crudAction('upsert_operation', { operation: op, item, locationStocks, warehouseStocks }));
+      await run(crudAction('upsert_operation', { operation: op, item, locationStocks, warehouseStocks }));
     }
 
-    await Promise.all(tasks);
     setImporting(false);
 
-    toast.success(`Импортировано выдач: ${orders.length} · позиций списано: ${parsed.validCount}`);
+    if (failed > 0) {
+      toast.error(`Импорт завершён с ошибками: ${failed} операций отклонено сервером. Обновите страницу для синхронизации.`);
+    } else {
+      toast.success(`Импортировано выдач: ${orders.length} · позиций списано: ${parsed.validCount}`);
+    }
     onClose();
   };
 

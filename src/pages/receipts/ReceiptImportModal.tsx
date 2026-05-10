@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
-import { AppState, crudAction } from '@/data/store';
+import { AppState, crudAction, setCrudErrorHandler } from '@/data/store';
 import {
   parseReceiptsExcel, buildReceiptsFromRows, downloadReceiptTemplate,
   ImportResult, FIXED_HEADERS,
@@ -55,24 +55,36 @@ export function ReceiptImportModal({ state, onStateChange, onClose }: Props) {
 
     onStateChange(nextState);
 
-    const tasks: Promise<boolean>[] = [];
-    for (const it of newItems) tasks.push(crudAction('upsert_item', { item: it }));
-    for (const p of newPartners) tasks.push(crudAction('upsert_partner', { partner: p }));
+    // Отключаем глобальный «откат» состояния на время импорта,
+    // чтобы оптимистично добавленные приходы не пропадали при ошибках отдельных запросов.
+    setCrudErrorHandler(null);
+    let failed = 0;
+
+    const run = async (p: Promise<boolean>) => {
+      const ok = await p;
+      if (!ok) failed += 1;
+    };
+
+    for (const it of newItems) await run(crudAction('upsert_item', { item: it }));
+    for (const p of newPartners) await run(crudAction('upsert_partner', { partner: p }));
     for (const r of receipts) {
-      tasks.push(crudAction('upsert_receipt', { receipt: r, receiptLines: r.lines }));
+      await run(crudAction('upsert_receipt', { receipt: r, receiptLines: r.lines }));
     }
     for (const op of operations) {
       const item = nextState.items.find(i => i.id === op.itemId);
       const locationStocks = (nextState.locationStocks || []).filter(ls => ls.itemId === op.itemId);
       const warehouseStocks = (nextState.warehouseStocks || []).filter(ws => ws.itemId === op.itemId);
-      tasks.push(crudAction('upsert_operation', { operation: op, item, locationStocks, warehouseStocks }));
+      await run(crudAction('upsert_operation', { operation: op, item, locationStocks, warehouseStocks }));
     }
-    tasks.push(crudAction('update_setting', { key: 'receiptCounter', value: String(nextState.receiptCounter) }));
+    await run(crudAction('update_setting', { key: 'receiptCounter', value: String(nextState.receiptCounter) }));
 
-    await Promise.all(tasks);
     setImporting(false);
 
-    toast.success(`Импортировано приходов: ${receipts.length} · позиций оприходовано: ${parsed.validCount}`);
+    if (failed > 0) {
+      toast.error(`Импорт завершён с ошибками: ${failed} операций отклонено сервером. Обновите страницу для синхронизации.`);
+    } else {
+      toast.success(`Импортировано приходов: ${receipts.length} · позиций оприходовано: ${parsed.validCount}`);
+    }
     onClose();
   };
 
