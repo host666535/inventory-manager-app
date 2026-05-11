@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Icon from '@/components/ui/icon';
 import { AppState, crudAction } from '@/data/store';
 import QRScanner from '@/components/QRScanner';
+import ChangePasswordDialog from '@/components/ChangePasswordDialog';
 import { useAuth } from '@/data/auth';
 
 export type Page = 'catalog' | 'nomenclature' | 'assembly' | 'warehouse' | 'receipts' | 'documents' | 'technician' | 'partners' | 'history' | 'settings' | 'dashboard' | 'inventory' | 'labels' | 'audit' | 'invoice';
@@ -23,6 +24,7 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
   const [qrOpen, setQrOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [desktopMoreOpen, setDesktopMoreOpen] = useState(false);
+  const [pwDialogOpen, setPwDialogOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const desktopMoreRef = useRef<HTMLDivElement>(null);
@@ -248,6 +250,9 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
                 {authUser?.role === 'warehouse' && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-600 dark:text-green-400 font-semibold">Склад</span>}
                 {authUser?.role === 'viewer' && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted-foreground/15 text-muted-foreground font-semibold">Просмотр</span>}
               </div>
+              <button onClick={() => setPwDialogOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Сменить пароль">
+                <Icon name="KeyRound" size={16} />
+              </button>
               <button onClick={() => logout()} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Выйти">
                 <Icon name="LogOut" size={16} />
               </button>
@@ -395,6 +400,8 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
         )}
         {children}
       </main>
+
+      <ChangePasswordDialog open={pwDialogOpen} onClose={() => setPwDialogOpen(false)} />
 
       {/* QR Scanner Modal */}
       <QRScanner
