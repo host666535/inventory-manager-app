@@ -84,11 +84,12 @@ echo   Если менял пароль - используй свой.
 echo ============================================
 echo.
 echo Кнопки:
-echo   up.bat          - быстрый старт (без пересборки)
-echo   stop.bat        - остановить
-echo   logs.bat        - смотреть логи
-echo   reset-pass.bat  - сбросить пароль admin на admin123
-echo   reset.bat       - полный сброс БД
+echo   up.bat               - быстрый старт (без пересборки)
+echo   stop.bat             - остановить
+echo   logs.bat             - смотреть логи
+echo   reset-pass.bat       - сбросить пароль admin на admin123
+echo   reset.bat            - полный сброс БД
+echo   build-apk-button.bat - собрать APK для телефона
 echo.
 start "" http://localhost:3000
 pause
