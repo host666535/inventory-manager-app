@@ -1,18 +1,17 @@
 @echo off
-chcp 65001 >nul
-title StockBase - полный сброс
+title StockBase - full reset
 echo.
-echo ВНИМАНИЕ! Это удалит ВСЕ данные в локальной БД StockBase.
-echo Бэкапы в папке ./backups останутся.
+echo WARNING! This will DELETE all data in the local StockBase DB.
+echo Files in ./backups will remain.
 echo.
-set /p ANSWER=Продолжить? (y/n): 
+set /p ANSWER=Continue? (y/n): 
 if /i not "%ANSWER%"=="y" (
-    echo Отменено.
+    echo Canceled.
     pause
     exit /b 0
 )
 echo.
 docker compose down -v
 echo.
-echo [OK] База удалена. Запускаю заново...
+echo [OK] DB deleted. Starting fresh...
 call start.bat

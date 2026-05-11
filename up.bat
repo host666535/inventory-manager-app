@@ -1,15 +1,14 @@
 @echo off
-chcp 65001 >nul
-title StockBase - быстрый старт
-echo Поднимаю контейнеры (без пересборки)...
+title StockBase - fast start
+echo Starting containers (no rebuild)...
 docker compose up -d
 if errorlevel 1 (
     echo.
-    echo [ОШИБКА] Не удалось. Если контейнеры не существуют, запусти start.bat
+    echo [ERROR] Failed. If containers do not exist yet, run start.bat first.
     pause
     exit /b 1
 )
 echo.
-echo [OK] Сайт: http://localhost:3000
+echo [OK] Site: http://localhost:3000
 start "" http://localhost:3000
 timeout /t 3 >nul

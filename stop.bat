@@ -1,8 +1,7 @@
 @echo off
-chcp 65001 >nul
-title StockBase - остановка
-echo Останавливаю контейнеры...
+title StockBase - stop
+echo Stopping containers...
 docker compose down
 echo.
-echo [OK] Остановлено. Данные сохранены в Docker-томе.
+echo [OK] Stopped. DB data is kept in Docker volume.
 pause

@@ -1,22 +1,20 @@
 @echo off
-chcp 65001 >nul
-title StockBase - сборка APK для телефона
+title StockBase - build APK for phone
 
 echo ============================================
-echo   Сборка APK для Android
+echo   Build APK for Android
 echo ============================================
 echo.
-echo Что нужно для сборки:
+echo Requirements:
 echo   - Node.js (npm)
 echo   - Android Studio + Android SDK
-echo   - Переменная ANDROID_HOME настроена
+echo   - ANDROID_HOME env variable set
 echo.
-echo Сборка займёт 3-10 минут. Готовый файл появится
-echo в корне проекта как StockBase.apk
+echo Build takes 3-10 minutes. Output: StockBase.apk in project root.
 echo.
-set /p ANSWER=Начать сборку? (y/n): 
+set /p ANSWER=Start build? (y/n): 
 if /i not "%ANSWER%"=="y" (
-    echo Отменено.
+    echo Canceled.
     pause
     exit /b 0
 )
