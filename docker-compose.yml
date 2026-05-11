@@ -9,7 +9,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-stockbase_secret}
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      # Монтируем папку с init-скриптами, а не одиночный файл —
+      # так Docker под Windows не создаёт случайно директорию вместо файла.
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     ports:
       - "5432:5432"
     healthcheck:

@@ -79,7 +79,10 @@ CREATE TABLE IF NOT EXISTS public.partners (
     type TEXT NOT NULL CHECK (type IN ('supplier', 'recipient')),
     contact TEXT,
     note TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    rank TEXT,
+    full_name TEXT,
+    department TEXT
 );
 
 -- Штрих-коды
@@ -103,7 +106,17 @@ CREATE TABLE IF NOT EXISTS public.work_orders (
     recipient_name TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    comment TEXT
+    comment TEXT,
+    receiver_rank TEXT,
+    receiver_name TEXT,
+    requester_rank TEXT,
+    requester_name TEXT,
+    issuer_rank TEXT,
+    issuer_name TEXT,
+    warehouse_id TEXT,
+    unit_group TEXT,
+    unit_formation TEXT,
+    unit_number TEXT
 );
 
 -- Позиции заявок
@@ -113,7 +126,8 @@ CREATE TABLE IF NOT EXISTS public.order_items (
     item_id TEXT NOT NULL,
     required_qty INTEGER NOT NULL DEFAULT 0,
     picked_qty INTEGER NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'pending'
+    status TEXT NOT NULL DEFAULT 'pending',
+    serial_number TEXT
 );
 
 -- Поступления
@@ -131,7 +145,8 @@ CREATE TABLE IF NOT EXISTS public.receipts (
     posted_at TIMESTAMPTZ,
     custom_fields JSONB DEFAULT '[]',
     scan_history JSONB DEFAULT '[]',
-    photo_url TEXT
+    photo_url TEXT,
+    attachments JSONB DEFAULT '[]'
 );
 
 -- Строки поступлений
