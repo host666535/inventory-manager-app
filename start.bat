@@ -70,24 +70,25 @@ goto waitloop
 :ready
 echo [OK] Бэкенд отвечает
 
-REM --- 5. Гарантируем рабочего admin / admin123 ---
-echo [..] Сбрасываю пароль admin/admin123 на всякий случай
-docker compose exec -T backend python -c "import os, psycopg2, bcrypt; c=psycopg2.connect(os.environ['DATABASE_URL']); cu=c.cursor(); h=bcrypt.hashpw(b'admin123', bcrypt.gensalt()).decode(); cu.execute(\"UPDATE public.users SET password_hash=%s, is_active=TRUE WHERE username='admin'\", (h,)); c.commit(); print('admin password reset')" 2>nul
+REM --- 5. Гарантируем что admin существует. Пароль НЕ трогаем если уже есть. ---
+echo [..] Проверяю учётку admin
+docker compose exec -T backend python -c "import os, psycopg2, bcrypt; c=psycopg2.connect(os.environ['DATABASE_URL']); cu=c.cursor(); cu.execute(\"SELECT 1 FROM public.users WHERE username='admin'\"); ex=cu.fetchone(); h=bcrypt.hashpw(b'admin123', bcrypt.gensalt()).decode(); cu.execute(\"INSERT INTO public.users (id, username, password_hash, display_name, role, is_active) VALUES ('user-admin-1','admin',%s,'Администратор','admin',TRUE) ON CONFLICT (username) DO UPDATE SET is_active=TRUE\", (h,)); c.commit(); print('[OK] admin exists' if ex else '[OK] admin created (login: admin, pass: admin123)')" 2>nul
 
 REM --- 6. Открываем сайт ---
 echo.
 echo ============================================
-echo   ГОТОВО!
+echo   ГОТОВО!  Сайт: http://localhost:3000
 echo ============================================
-echo   Сайт:      http://localhost:3000
-echo   Логин:     admin
-echo   Пароль:    admin123
+echo   Если входишь впервые: admin / admin123
+echo   Если менял пароль - используй свой.
 echo ============================================
 echo.
-echo Полезное:
+echo Кнопки:
+echo   up.bat          - быстрый старт (без пересборки)
 echo   stop.bat        - остановить
-echo   reset.bat       - сброс БД и пересборка
 echo   logs.bat        - смотреть логи
+echo   reset-pass.bat  - сбросить пароль admin на admin123
+echo   reset.bat       - полный сброс БД
 echo.
 start "" http://localhost:3000
 pause
