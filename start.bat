@@ -1,6 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 title StockBase - start
+cd /d "%~dp0"
 
 echo ============================================
 echo   StockBase: starting in Docker
@@ -18,10 +19,22 @@ if errorlevel 1 (
 
 docker info >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Docker Desktop is not running.
-    echo Open Docker Desktop, wait for "Engine running", then run start.bat again.
-    pause
-    exit /b 1
+    echo [..] Docker Desktop is not running. Trying to start it...
+    start "" "%ProgramFiles%\Docker\Docker\Docker Desktop.exe" 2>nul
+    set /a wait_dk=0
+    :waitdocker
+    set /a wait_dk+=1
+    timeout /t 3 /nobreak >nul
+    docker info >nul 2>&1
+    if not errorlevel 1 goto dockerok
+    if !wait_dk! GEQ 30 (
+        echo [ERROR] Docker did not start in 90 seconds.
+        echo Open Docker Desktop manually, wait for "Engine running", then run start.bat again.
+        pause
+        exit /b 1
+    )
+    goto waitdocker
+    :dockerok
 )
 echo [OK] Docker is running
 
@@ -37,25 +50,37 @@ echo [..] Building and starting containers (first run: 2-5 minutes)
 docker compose up -d --build
 if errorlevel 1 (
     echo.
-    echo [ERROR] Failed to start containers. See log above.
-    echo Try: docker compose down -v   then start.bat again
-    pause
-    exit /b 1
+    echo [!] First attempt failed. Trying clean rebuild...
+    docker compose down 2>nul
+    docker compose build --no-cache
+    if errorlevel 1 (
+        echo.
+        echo [ERROR] Build failed. Likely a missing npm package in package.json.
+        echo Send the log above to support.
+        pause
+        exit /b 1
+    )
+    docker compose up -d
+    if errorlevel 1 (
+        echo [ERROR] Cannot start containers. See log above.
+        pause
+        exit /b 1
+    )
 )
 
 REM --- 4. Wait for backend ---
 echo.
-echo [..] Waiting for backend (up to 60 sec)
+echo [..] Waiting for backend (up to 90 sec)
 set /a tries=0
 :waitloop
 set /a tries+=1
 curl -s -o nul -w "%%{http_code}" http://localhost:8080/api/crud?action=check > "%TEMP%\sb_status.txt" 2>nul
 set /p code=<"%TEMP%\sb_status.txt"
 del "%TEMP%\sb_status.txt" >nul 2>&1
-if "%code%"=="200" goto ready
-if %tries% GEQ 30 (
+if "!code!"=="200" goto ready
+if !tries! GEQ 45 (
     echo.
-    echo [WARN] Backend did not respond in 60 sec. Logs:
+    echo [WARN] Backend did not respond in 90 sec. Logs:
     docker compose logs --tail=40 backend
     echo.
     echo Use logs.bat to see full logs.
@@ -82,6 +107,7 @@ echo.
 echo Buttons:
 echo   up.bat               - fast start (no rebuild)
 echo   stop.bat             - stop containers
+echo   update.bat           - get latest version + rebuild
 echo   logs.bat             - view logs
 echo   reset-pass.bat       - reset admin password to admin123
 echo   reset.bat            - full DB reset
