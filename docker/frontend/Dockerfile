@@ -1,17 +1,13 @@
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
 # Сначала только манифесты — кешируется слой с зависимостями
 COPY package.json package-lock.json* bun.lockb* ./
 
-# npm ci быстрее и детерминирован при наличии package-lock.json;
-# fallback на npm install если lock-файла нет.
-RUN if [ -f package-lock.json ]; then \
-      npm ci --no-audit --no-fund --legacy-peer-deps; \
-    else \
-      npm install --no-audit --no-fund --legacy-peer-deps; \
-    fi
+# npm install сам разрулит расхождения между package.json и устаревшим lock-файлом.
+# npm ci НЕ используем намеренно — он валится если lock не идеально синхронизирован.
+RUN npm install --no-audit --no-fund --legacy-peer-deps
 
 COPY . .
 
