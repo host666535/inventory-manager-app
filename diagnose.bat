@@ -9,6 +9,18 @@ echo.
 echo Current folder: %CD%
 echo.
 
+echo --- Step 0: Path sanity ---
+echo %CD%| findstr /R /C:"[^a-zA-Z0-9_\\:.\- ]" >nul
+if not errorlevel 1 (
+    echo [WARN] Path contains non-ASCII chars or special symbols.
+    echo Docker volumes may break. Move project to e.g. C:\stockbase
+)
+echo %CD% | find "Program Files" >nul
+if not errorlevel 1 (
+    echo [WARN] Project is under "Program Files". Move to C:\stockbase or similar.
+)
+echo.
+
 echo --- Step 1: Docker version ---
 docker --version
 echo.
