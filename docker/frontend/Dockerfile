@@ -2,9 +2,6 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Системные зависимости для нативных модулей (например, sharp/canvas, если появятся)
-RUN apk add --no-cache python3 make g++ libc6-compat || true
-
 # Сначала только манифесты — кешируется слой с зависимостями
 COPY package.json package-lock.json* bun.lockb* ./
 

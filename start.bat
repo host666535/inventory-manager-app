@@ -56,7 +56,7 @@ if not exist "docker-compose.yml" (
     goto end
 )
 
-REM --- 2.2 Warn about busy ports (non-fatal) ---
+REM --- 2.2 Warn about busy ports, non-fatal ---
 call :checkport 3000
 call :checkport 8080
 call :checkport 5432
@@ -72,7 +72,7 @@ if errorlevel 1 (
 
 REM --- 3. Build and start containers ---
 echo.
-echo [..] Building and starting containers (first run: 2-5 minutes)
+echo [..] Building and starting containers ^(first run: 2-5 minutes^)
 docker compose up -d --build
 if errorlevel 1 (
     echo.
@@ -100,7 +100,7 @@ if errorlevel 1 (
 
 REM --- 4. Wait for backend ---
 echo.
-echo [..] Waiting for backend (up to 90 sec)
+echo [..] Waiting for backend ^(up to 90 sec^)
 set /a tries=0
 :waitloop
 set /a tries+=1
