@@ -81,18 +81,44 @@ export function useWarehouseMap(
 
   const locationsWithMatches = useMemo(() => {
     if (!search && categoryFilter === 'all') return new Set(state.locations.map(l => l.id));
-    return new Set(
-      (state.locationStocks || [])
-        .filter(ls => {
-          const item = state.items.find(i => i.id === ls.itemId);
-          if (!item) return false;
-          if (categoryFilter !== 'all' && item.categoryId !== categoryFilter) return false;
-          if (search && !item.name.toLowerCase().includes(search.toLowerCase())) return false;
-          return ls.quantity > 0;
-        })
-        .map(ls => ls.locationId)
-    );
-  }, [search, categoryFilter, state]);
+    const itemsById = new Map(state.items.map(i => [i.id, i]));
+    const q = search.trim().toLowerCase();
+
+    // Если поисковая строка похожа на серийник/штрихкод — собираем itemIds, которым он соответствует.
+    // Это делает поиск по карте «умным»: можно ввести S/N или код — карта подсветит полки с этими товарами.
+    const itemIdsBySerial = new Set<string>();
+    if (q) {
+      // 1. По barcodes (штрих-коды/QR, привязанные к товарам)
+      for (const bc of (state.barcodes || [])) {
+        if (bc.code.toLowerCase().includes(q) || (bc.label && bc.label.toLowerCase().includes(q))) {
+          itemIdsBySerial.add(bc.itemId);
+        }
+      }
+      // 2. По серийникам из позиций выдач (workOrders.items[].serialNumber)
+      for (const wo of (state.workOrders || [])) {
+        for (const oi of (wo.items || [])) {
+          if (oi.serialNumber && oi.serialNumber.toLowerCase().includes(q)) {
+            itemIdsBySerial.add(oi.itemId);
+          }
+        }
+      }
+    }
+
+    const result = new Set<string>();
+    for (const ls of (state.locationStocks || [])) {
+      if (ls.quantity <= 0) continue;
+      const item = itemsById.get(ls.itemId);
+      if (!item) continue;
+      if (categoryFilter !== 'all' && item.categoryId !== categoryFilter) continue;
+      if (q) {
+        const matchName = item.name.toLowerCase().includes(q);
+        const matchSerial = itemIdsBySerial.has(item.id);
+        if (!matchName && !matchSerial) continue;
+      }
+      result.add(ls.locationId);
+    }
+    return result;
+  }, [search, categoryFilter, state.items, state.locationStocks, state.locations, state.barcodes, state.workOrders]);
 
   const handleItemDragStart = useCallback((e: React.DragEvent, itemId: string, fromLocationId: string) => {
     setDragState({ itemId, fromLocationId });

@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
-import { AppState, crudAction } from '@/data/store';
+import { AppState, crudAction, updateAllStocks } from '@/data/store';
+import { toast } from 'sonner';
 
 export function MoveItemModal({
   itemId, fromLocationId, toLocationId, state, onStateChange, onClose,
@@ -38,36 +39,37 @@ export function MoveItemModal({
   if (!item || !fromLoc) return null;
   const qtyNum = parseInt(qty) || 0;
 
+  // Запрет перемещения со стеллажа — только с полки (стеллаж = есть дочерние локации)
+  const isShelf = state.locations.some(ch => ch.parentId === fromLocationId);
+  const isRack = !fromLoc.parentId && isShelf;
+
   const handleMove = () => {
     if (qtyNum <= 0 || qtyNum > fromStock || !selectedToId) return;
-
-    let newStocks = [...(state.locationStocks || [])];
-
-    const srcIdx = newStocks.findIndex(ls => ls.itemId === itemId && ls.locationId === fromLocationId);
-    if (srcIdx >= 0) {
-      const newQty = newStocks[srcIdx].quantity - qtyNum;
-      if (newQty <= 0) newStocks = newStocks.filter((_, i) => i !== srcIdx);
-      else newStocks[srcIdx] = { ...newStocks[srcIdx], quantity: newQty };
+    if (isRack) {
+      toast.error('Перемещайте товар только с полок, а не со стеллажа');
+      return;
     }
 
-    const dstIdx = newStocks.findIndex(ls => ls.itemId === itemId && ls.locationId === selectedToId);
-    if (dstIdx >= 0) {
-      newStocks[dstIdx] = { ...newStocks[dstIdx], quantity: newStocks[dstIdx].quantity + qtyNum };
-    } else {
-      newStocks.push({ itemId, locationId: selectedToId, quantity: qtyNum });
+    // Единый источник правды: списываем с источника, прибавляем к цели.
+    let next = updateAllStocks(state, itemId, fromLocationId, null, -qtyNum);
+    next = updateAllStocks(next, itemId, selectedToId, null, qtyNum);
+
+    // Если источник опустел, а карточка товара была привязана к нему — переносим привязку
+    const remainingInSrc = (next.locationStocks || []).find(
+      ls => ls.itemId === itemId && ls.locationId === fromLocationId,
+    );
+    if ((!remainingInSrc || remainingInSrc.quantity === 0) && item.locationId === fromLocationId) {
+      next = {
+        ...next,
+        items: next.items.map(i => i.id === itemId ? { ...i, locationId: selectedToId } : i),
+      };
     }
 
-    const remainingInSrc = newStocks.find(ls => ls.itemId === itemId && ls.locationId === fromLocationId);
-    let updatedItems = state.items;
-    if (!remainingInSrc && item.locationId === fromLocationId) {
-      updatedItems = state.items.map(i => i.id === itemId ? { ...i, locationId: selectedToId } : i);
-    }
-
-    const next = { ...state, locationStocks: newStocks, items: updatedItems };
     onStateChange(next);
-    const fromLS = newStocks.find(ls => ls.itemId === itemId && ls.locationId === fromLocationId)
+
+    const fromLS = (next.locationStocks || []).find(ls => ls.itemId === itemId && ls.locationId === fromLocationId)
       || { itemId, locationId: fromLocationId, quantity: 0 };
-    const toLS = newStocks.find(ls => ls.itemId === itemId && ls.locationId === selectedToId);
+    const toLS = (next.locationStocks || []).find(ls => ls.itemId === itemId && ls.locationId === selectedToId);
     crudAction('upsert_location_stock', { locationStock: fromLS });
     if (toLS) crudAction('upsert_location_stock', { locationStock: toLS });
     onClose();

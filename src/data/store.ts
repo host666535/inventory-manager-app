@@ -57,6 +57,8 @@ export type Operation = {
   locationId?: string;
   warehouseId?: string;       // склад операции
   scannedCodes?: string[];    // отсканированные штрих-коды в этой операции
+  transferFromWarehouseId?: string;  // для операций перемещения между складами
+  transferToWarehouseId?: string;
 };
 
 // ─── Warehouses (Склады) ──────────────────────────────────────────────────────
@@ -616,22 +618,66 @@ export function updateLocationStock(state: AppState, itemId: string, locationId:
     next = state.locationStocks;
   }
   let result: AppState = { ...state, locationStocks: next };
+
+  // Синхронизируем warehouseStocks и item.quantity ВСЕГДА (и при +, и при -),
+  // чтобы не было рассинхрона трёх источников правды.
   const location = state.locations.find(l => l.id === locationId);
-  if (location?.warehouseId && delta > 0) {
+  if (location?.warehouseId) {
     const whId = location.warehouseId;
-    const whStock = (result.warehouseStocks || []).find(ws => ws.itemId === itemId && ws.warehouseId === whId);
+    const locsOfWh = new Set(state.locations.filter(l => l.warehouseId === whId).map(l => l.id));
     const locTotal = next
-      .filter(ls => ls.itemId === itemId && state.locations.some(l => l.id === ls.locationId && l.warehouseId === whId))
+      .filter(ls => ls.itemId === itemId && locsOfWh.has(ls.locationId))
       .reduce((s, ls) => s + ls.quantity, 0);
+    const stocks = result.warehouseStocks || [];
+    const whStock = stocks.find(ws => ws.itemId === itemId && ws.warehouseId === whId);
+    let newStocks: WarehouseStock[];
     if (!whStock) {
-      result = { ...result, warehouseStocks: [...(result.warehouseStocks || []), { itemId, warehouseId: whId, quantity: locTotal }] };
-    } else if (whStock.quantity < locTotal) {
-      result = { ...result, warehouseStocks: (result.warehouseStocks || []).map(ws =>
+      newStocks = locTotal > 0 ? [...stocks, { itemId, warehouseId: whId, quantity: locTotal }] : stocks;
+    } else {
+      newStocks = stocks.map(ws =>
         ws.itemId === itemId && ws.warehouseId === whId ? { ...ws, quantity: locTotal } : ws
-      )};
+      );
     }
+    result = { ...result, warehouseStocks: newStocks };
+    // item.quantity = сумма по всем складам
+    const totalQty = newStocks
+      .filter(ws => ws.itemId === itemId)
+      .reduce((s, ws) => s + ws.quantity, 0);
+    result = {
+      ...result,
+      items: result.items.map(it => it.id === itemId ? { ...it, quantity: totalQty } : it),
+    };
   }
   return result;
+}
+
+/**
+ * Единая точка изменения остатков — три источника правды всегда согласованы.
+ * - Если указан locationId — меняем locationStock и через него каскадно warehouseStock + item.quantity.
+ * - Если указан только warehouseId — меняем warehouseStock + item.quantity напрямую.
+ * - delta может быть отрицательным (списание/перемещение/выдача).
+ */
+export function updateAllStocks(
+  state: AppState,
+  itemId: string,
+  locationId: string | null | undefined,
+  warehouseId: string | null | undefined,
+  delta: number
+): AppState {
+  if (delta === 0) return state;
+  if (locationId) {
+    return updateLocationStock(state, itemId, locationId, delta);
+  }
+  if (warehouseId) {
+    return updateWarehouseStock(state, itemId, warehouseId, delta);
+  }
+  // Нет привязки — меняем только item.quantity
+  return {
+    ...state,
+    items: state.items.map(it =>
+      it.id === itemId ? { ...it, quantity: Math.max(0, it.quantity + delta) } : it
+    ),
+  };
 }
 
 export function getWarehouseStock(state: AppState, itemId: string, warehouseId: string): number {

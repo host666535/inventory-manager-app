@@ -10,7 +10,7 @@ type Props = {
   topLocations: Location[];
   childLocations: (parentId: string) => Location[];
   selectedLocationId: string | null;
-  setSelectedLocationId: (id: string | null) => void;
+  setSelectedLocationId: React.Dispatch<React.SetStateAction<string | null>>;
   dragOverLocationId: string | null;
   locationColors: Record<string, string>;
   search: string;
@@ -35,10 +35,10 @@ export default function WarehouseMapGrid({
   setEditLocation, setShowAddLocation, handleDeleteLocation,
   handleDragOver, handleDragLeave, handleDrop, handleItemDragStart,
 }: Props) {
-  // Стабильный toggle — не пересоздаётся, только читает актуальный selectedLocationId.
+  // Стабильный toggle — не пересоздаётся, читает актуальное значение через функциональный setState.
   const handleCardSelect = useCallback((locationId: string) => {
-    setSelectedLocationId(selectedLocationId === locationId ? null : locationId);
-  }, [selectedLocationId, setSelectedLocationId]);
+    setSelectedLocationId(prev => prev === locationId ? null : locationId);
+  }, [setSelectedLocationId]);
 
   if (state.locations.length === 0) {
     return (
@@ -73,7 +73,7 @@ export default function WarehouseMapGrid({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setSelectedLocationId(isSelected ? null : topLoc.id)}
+                onClick={() => setSelectedLocationId(prev => prev === topLoc.id ? null : topLoc.id)}
                 className={`flex items-center gap-2 rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-muted/60 ${isSelected ? 'bg-primary/10' : ''}`}
                 title={isParent ? 'Открыть панель стеллажа (контейнер для полок)' : 'Открыть локацию'}
               >

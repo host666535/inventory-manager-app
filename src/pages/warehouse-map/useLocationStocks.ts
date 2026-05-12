@@ -26,15 +26,35 @@ export function useLocationStocks(
       .filter((ls): ls is LocationStockRow => !!ls.item);
 
     if (search || categoryFilter !== 'all') {
-      const q = search.toLowerCase();
+      const q = search.trim().toLowerCase();
+      // Карта itemId → подходит по серийнику/штрих-коду — чтобы поиск согласовался с картой в целом
+      const itemIdsBySerial = new Set<string>();
+      if (q) {
+        for (const bc of (state.barcodes || [])) {
+          if (bc.code.toLowerCase().includes(q) || (bc.label && bc.label.toLowerCase().includes(q))) {
+            itemIdsBySerial.add(bc.itemId);
+          }
+        }
+        for (const wo of (state.workOrders || [])) {
+          for (const oi of (wo.items || [])) {
+            if (oi.serialNumber && oi.serialNumber.toLowerCase().includes(q)) {
+              itemIdsBySerial.add(oi.itemId);
+            }
+          }
+        }
+      }
       return rows.filter(ls => {
         if (categoryFilter !== 'all' && ls.item.categoryId !== categoryFilter) return false;
-        if (q && !ls.item.name.toLowerCase().includes(q)) return false;
+        if (q) {
+          const byName = ls.item.name.toLowerCase().includes(q);
+          const bySerial = itemIdsBySerial.has(ls.item.id);
+          if (!byName && !bySerial) return false;
+        }
         return true;
       });
     }
     return rows;
-  }, [state.locationStocks, state.items, locationId, search, categoryFilter]);
+  }, [state.locationStocks, state.items, state.barcodes, state.workOrders, locationId, search, categoryFilter]);
 }
 
 /** Вычисляет worst-level по массиву строк (для индикатора статуса локации). */

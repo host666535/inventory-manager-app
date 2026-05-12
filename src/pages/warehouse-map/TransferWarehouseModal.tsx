@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
-import { AppState, Operation, Warehouse, crudAction, generateId, updateWarehouseStock } from '@/data/store';
+import { AppState, Operation, Warehouse, crudAction, generateId, updateAllStocks } from '@/data/store';
 
 export function TransferWarehouseModal({
   state, onStateChange, onClose, defaultFromId,
@@ -40,33 +40,42 @@ export function TransferWarehouseModal({
   const handleTransfer = () => {
     if (!isValid || !selectedItem) return;
 
-    let next = updateWarehouseStock(state, itemId, fromWhId, -qtyNum);
-    next = updateWarehouseStock(next, itemId, toWhId, qtyNum);
+    // Единая точка изменения остатков (списать → приходовать)
+    let next = updateAllStocks(state, itemId, null, fromWhId, -qtyNum);
+    next = updateAllStocks(next, itemId, null, toWhId, qtyNum);
 
+    const now = new Date().toISOString();
+    const commentText = `[Перемещение] ${fromWh?.name} → ${toWh?.name}${comment ? ': ' + comment : ''}`;
     const op: Operation = {
       id: generateId(),
       itemId,
       type: 'out',
       quantity: qtyNum,
-      comment: `[Перемещение] ${fromWh?.name} → ${toWh?.name}${comment ? ': ' + comment : ''}`,
+      comment: commentText,
       from: fromWh?.name,
       to: toWh?.name,
       performedBy: state.currentUser,
-      date: new Date().toISOString(),
+      date: now,
       warehouseId: fromWhId,
+      transferFromWarehouseId: fromWhId,
+      transferToWarehouseId: toWhId,
     };
     const opIn: Operation = {
       id: generateId(),
       itemId,
       type: 'in',
       quantity: qtyNum,
-      comment: `[Перемещение] ${fromWh?.name} → ${toWh?.name}${comment ? ': ' + comment : ''}`,
+      comment: commentText,
       from: fromWh?.name,
       to: toWh?.name,
       performedBy: state.currentUser,
-      date: new Date().toISOString(),
+      date: now,
       warehouseId: toWhId,
+      transferFromWarehouseId: fromWhId,
+      transferToWarehouseId: toWhId,
     };
+    // Правильный хронологический порядок: сначала списали (op), потом приходовали (opIn).
+    // В список добавляем в обратном порядке, чтобы opIn оказался "новее" в ленте.
     next = { ...next, operations: [opIn, op, ...next.operations] };
     onStateChange(next);
     const updatedItem = next.items.find(i => i.id === itemId);
