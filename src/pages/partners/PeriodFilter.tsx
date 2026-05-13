@@ -179,29 +179,38 @@ export function AddPartnerModal({ type, partner, onSave, onClose }: {
   const isRecipient = type === 'recipient';
   const isEdit = !!partner;
 
-  // Для поставщика работаем с "name". Для получателя — три отдельных поля.
+  // Для поставщика работаем с "name". Для получателя — иерархия.
   const [supplierName, setSupplierName] = useState(partner?.name || '');
-  const [department, setDepartment] = useState(
-    partner?.department || (isRecipient ? partner?.name || '' : '')
-  );
+  const [unitGroup, setUnitGroup] = useState(partner?.unitGroup || '');
+  const [unitFormation, setUnitFormation] = useState(partner?.unitFormation || '');
   const [rank, setRank] = useState(partner?.rank || '');
   const [fullName, setFullName] = useState(partner?.fullName || '');
   const [contact, setContact] = useState(partner?.contact || '');
   const [note, setNote] = useState(partner?.note || '');
 
-  const canSave = isRecipient ? department.trim().length > 0 : supplierName.trim().length > 0;
+  // Подсказки: уже существующие Объединения / Соединения у других получателей.
+  // Соединения предлагаем фильтрованные по выбранному Объединению.
+  // Берём из state? — нет, у нас здесь только partner. Передавать список снаружи
+  // не стали для минимизации правок: датасет уж невелик, можно вбить и заново.
+  // (Если нужно автодополнение — добавим позже.)
+
+  const composedDepartment = [unitGroup.trim(), unitFormation.trim()].filter(Boolean).join(' / ');
+  const canSave = isRecipient ? composedDepartment.length > 0 : supplierName.trim().length > 0;
 
   const handleSave = () => {
     if (!canSave) return;
     if (isRecipient) {
-      const dept = department.trim();
+      const ug = unitGroup.trim();
+      const uf = unitFormation.trim();
       const rk = rank.trim();
       const fn = fullName.trim();
-      // Название = подразделение + ФИО (для удобного поиска и печати)
+      const dept = composedDepartment;
       const composedName = [dept, fn].filter(Boolean).join(' — ') || dept;
       onSave({
         name: composedName,
         department: dept || undefined,
+        unitGroup: ug || undefined,
+        unitFormation: uf || undefined,
         rank: rk || undefined,
         fullName: fn || undefined,
         contact: contact.trim() || undefined,
@@ -228,9 +237,26 @@ export function AddPartnerModal({ type, partner, onSave, onClose }: {
         <div className="space-y-3 pt-2">
           {isRecipient ? (
             <>
-              <div className="space-y-1.5">
-                <Label>Структурное подразделение *</Label>
-                <Input value={department} onChange={e => setDepartment(e.target.value)} placeholder="Напр.: 8-я рота" autoFocus />
+              <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-3 space-y-2.5">
+                <div className="flex items-center gap-2 text-xs font-semibold text-primary uppercase tracking-wide">
+                  <Icon name="Network" size={12} />
+                  Структурное подразделение
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Объединение *</Label>
+                    <Input value={unitGroup} onChange={e => setUnitGroup(e.target.value)} placeholder="Напр.: ГМП, ЧНП" autoFocus />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Соединение *</Label>
+                    <Input value={unitFormation} onChange={e => setUnitFormation(e.target.value)} placeholder="Напр.: 61 обрмп" />
+                  </div>
+                </div>
+                {composedDepartment && (
+                  <div className="text-[11px] text-muted-foreground">
+                    В накладной появится как: <span className="font-semibold text-foreground">{composedDepartment}</span>
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Должность / звание</Label>

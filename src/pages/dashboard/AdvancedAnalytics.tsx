@@ -398,13 +398,26 @@ export function AdvancedAnalytics({ state }: Props) {
           <div className="text-sm text-muted-foreground text-center py-6">Нет данных за выбранный период</div>
         ) : (
           <>
-            <ResponsiveContainer width="100%" height={Math.max(220, topRecipients.length * 28)}>
-              <BarChart data={topRecipients} layout="vertical" margin={{ left: 10 }}>
+            <ResponsiveContainer width="100%" height={Math.max(220, topRecipients.length * 32)}>
+              <BarChart data={topRecipients} layout="vertical" margin={{ left: 10, right: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis type="number" fontSize={11} />
-                <YAxis dataKey="name" type="category" fontSize={11} width={140} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="qty" fill="#6366f1" radius={[0, 4, 4, 0]} name="Количество" />
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  fontSize={11}
+                  width={180}
+                  tick={{ fill: 'hsl(var(--foreground))' }}
+                  interval={0}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value: number, _name: string, props: { payload?: { count?: number; uniqueItems?: number } }) => [
+                    `${value} шт. · ${props?.payload?.count ?? 0} операций · ${props?.payload?.uniqueItems ?? 0} позиций`,
+                    'Получено',
+                  ]}
+                />
+                <Bar dataKey="qty" fill="#6366f1" radius={[0, 4, 4, 0]} name="Количество" label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--foreground))' }} />
               </BarChart>
             </ResponsiveContainer>
             <div className="overflow-x-auto mt-3">
@@ -438,12 +451,27 @@ export function AdvancedAnalytics({ state }: Props) {
           <div className="text-sm text-muted-foreground text-center py-6">Нет расходов за выбранный период</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={320}>
               <PieChart>
-                <Pie data={byCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} innerRadius={50}>
+                <Pie
+                  data={byCategory}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={100}
+                  innerRadius={50}
+                  label={(entry: { name: string; value: number; percent: number }) =>
+                    `${entry.name}: ${entry.value} (${(entry.percent * 100).toFixed(0)}%)`
+                  }
+                  labelLine={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}
+                >
                   {byCategory.map((e, i) => <Cell key={i} fill={e.color} />)}
                 </Pie>
-                <Tooltip contentStyle={tooltipStyle} />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value: number, name: string) => [`${value}`, name]}
+                />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -476,29 +504,59 @@ export function AdvancedAnalytics({ state }: Props) {
         {topItemsOut.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-6">Нет расходов</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground text-left">
-                  <th className="pb-2 pr-3 font-medium">#</th>
-                  <th className="pb-2 pr-3 font-medium">Позиция</th>
-                  <th className="pb-2 pr-3 font-medium">Категория</th>
-                  <th className="pb-2 pr-3 font-medium text-right">Расход</th>
-                  <th className="pb-2 font-medium text-right">Операций</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topItemsOut.map((r, i) => (
-                  <tr key={i} className="border-b last:border-0">
-                    <td className="py-2 pr-3 text-muted-foreground tabular-nums">{i + 1}</td>
-                    <td className="py-2 pr-3 font-medium">{r.name}</td>
-                    <td className="py-2 pr-3 text-xs" style={{ color: r.color }}>{r.category}</td>
-                    <td className="py-2 pr-3 text-right font-bold tabular-nums text-destructive">-{r.qty} <span className="text-xs font-normal text-muted-foreground">{r.unit}</span></td>
-                    <td className="py-2 text-right tabular-nums text-muted-foreground">{r.count}</td>
+          <div className="space-y-4">
+            {/* Горизонтальный bar chart с НАЗВАНИЯМИ позиций по оси Y */}
+            <ResponsiveContainer width="100%" height={Math.max(260, topItemsOut.length * 28)}>
+              <BarChart data={topItemsOut} layout="vertical" margin={{ left: 10, right: 30 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis type="number" fontSize={11} />
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  fontSize={11}
+                  width={180}
+                  tick={{ fill: 'hsl(var(--foreground))' }}
+                  interval={0}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value: number, _name: string, props: { payload?: { unit?: string } }) => [
+                    `${value} ${props?.payload?.unit || ''}`,
+                    'Расход',
+                  ]}
+                />
+                <Bar dataKey="qty" fill="#ef4444" radius={[0, 4, 4, 0]}>
+                  {topItemsOut.map((entry, i) => (
+                    <Cell key={i} fill={entry.color || '#ef4444'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground text-left">
+                    <th className="pb-2 pr-3 font-medium">#</th>
+                    <th className="pb-2 pr-3 font-medium">Позиция</th>
+                    <th className="pb-2 pr-3 font-medium">Категория</th>
+                    <th className="pb-2 pr-3 font-medium text-right">Расход</th>
+                    <th className="pb-2 font-medium text-right">Операций</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {topItemsOut.map((r, i) => (
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="py-2 pr-3 text-muted-foreground tabular-nums">{i + 1}</td>
+                      <td className="py-2 pr-3 font-medium">{r.name}</td>
+                      <td className="py-2 pr-3 text-xs" style={{ color: r.color }}>{r.category}</td>
+                      <td className="py-2 pr-3 text-right font-bold tabular-nums text-destructive">-{r.qty} <span className="text-xs font-normal text-muted-foreground">{r.unit}</span></td>
+                      <td className="py-2 text-right tabular-nums text-muted-foreground">{r.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </Section>
@@ -507,12 +565,22 @@ export function AdvancedAnalytics({ state }: Props) {
         {byWarehouse.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-6">Нет операций</div>
         ) : (
-          <ResponsiveContainer width="100%" height={Math.max(180, byWarehouse.length * 50)}>
-            <BarChart data={byWarehouse} layout="vertical">
+          <ResponsiveContainer width="100%" height={Math.max(180, byWarehouse.length * 60)}>
+            <BarChart data={byWarehouse} layout="vertical" margin={{ left: 10, right: 40 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis type="number" fontSize={11} />
-              <YAxis dataKey="name" type="category" fontSize={11} width={120} />
-              <Tooltip contentStyle={tooltipStyle} />
+              <YAxis
+                dataKey="name"
+                type="category"
+                fontSize={11}
+                width={160}
+                tick={{ fill: 'hsl(var(--foreground))' }}
+                interval={0}
+              />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={(value: number, name: string) => [`${value}`, name]}
+              />
               <Legend />
               <Bar dataKey="inQty" stackId="a" fill="#10b981" name="Приход" />
               <Bar dataKey="outQty" stackId="a" fill="#ef4444" name="Расход" />
@@ -525,25 +593,46 @@ export function AdvancedAnalytics({ state }: Props) {
         {mostActive.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-6">Нет данных</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground text-left">
-                  <th className="pb-2 pr-3 font-medium">#</th>
-                  <th className="pb-2 pr-3 font-medium">Позиция</th>
-                  <th className="pb-2 font-medium text-right">Операций за период</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mostActive.map((r, i) => (
-                  <tr key={i} className="border-b last:border-0">
-                    <td className="py-2 pr-3 text-muted-foreground tabular-nums">{i + 1}</td>
-                    <td className="py-2 pr-3 font-medium">{r.name}</td>
-                    <td className="py-2 text-right font-bold tabular-nums">{r.ops}</td>
+          <div className="space-y-4">
+            <ResponsiveContainer width="100%" height={Math.max(220, mostActive.length * 28)}>
+              <BarChart data={mostActive} layout="vertical" margin={{ left: 10, right: 30 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis type="number" fontSize={11} />
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  fontSize={11}
+                  width={180}
+                  tick={{ fill: 'hsl(var(--foreground))' }}
+                  interval={0}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value: number) => [`${value}`, 'Операций']}
+                />
+                <Bar dataKey="ops" fill="#8b5cf6" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--foreground))' }} />
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground text-left">
+                    <th className="pb-2 pr-3 font-medium">#</th>
+                    <th className="pb-2 pr-3 font-medium">Позиция</th>
+                    <th className="pb-2 font-medium text-right">Операций за период</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {mostActive.map((r, i) => (
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="py-2 pr-3 text-muted-foreground tabular-nums">{i + 1}</td>
+                      <td className="py-2 pr-3 font-medium">{r.name}</td>
+                      <td className="py-2 text-right font-bold tabular-nums">{r.ops}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </Section>

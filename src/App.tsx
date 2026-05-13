@@ -132,14 +132,19 @@ export default function App() {
     try {
       const result = await loadStateFromServer();
       if (!result) return false;
-      // Авто-миграция: гарантируем что у каждого склада есть локация «Пол».
-      const { state: ensured, created } = ensureFloorLocations(result.state);
+      // Авто-миграция: ровно один «Пол» на склад.
+      // Лишние Полы сливаются в один, дубликаты удаляются на сервере.
+      const { state: ensured, created, removedIds } = ensureFloorLocations(result.state);
       setState(ensured);
       lastUpdatedRef.current = result.updatedAt || '';
-      // Если создали новые Floor-локации — отправляем на сервер фоном.
       if (created.length > 0) {
         created.forEach(floor => {
           crudAction('upsert_location', { location: floor }).catch(() => { /* noop */ });
+        });
+      }
+      if (removedIds.length > 0) {
+        removedIds.forEach(id => {
+          crudAction('delete_location', { id }).catch(() => { /* noop */ });
         });
       }
       return true;

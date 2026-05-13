@@ -193,8 +193,9 @@ export default function DashboardPage({ state }: Props) {
                   fontSize: 13,
                 }}
               />
-              <Bar dataKey="Приход" fill="#10b981" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Расход" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Legend />
+              <Bar dataKey="Приход" fill="#10b981" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 10, fill: 'hsl(var(--foreground))' }} />
+              <Bar dataKey="Расход" fill="#ef4444" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 10, fill: 'hsl(var(--foreground))' }} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -210,9 +211,13 @@ export default function DashboardPage({ state }: Props) {
                 nameKey="name"
                 cx="50%"
                 cy="50%"
-                outerRadius={100}
-                innerRadius={50}
+                outerRadius={90}
+                innerRadius={45}
                 paddingAngle={2}
+                label={(entry: { name: string; value: number; percent: number }) =>
+                  `${entry.name}: ${entry.value} (${(entry.percent * 100).toFixed(0)}%)`
+                }
+                labelLine={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}
               >
                 {pieData.map((entry, idx) => (
                   <Cell key={idx} fill={entry.color} />
@@ -225,6 +230,7 @@ export default function DashboardPage({ state }: Props) {
                   borderRadius: 8,
                   fontSize: 13,
                 }}
+                formatter={(value: number, name: string) => [`${value} шт.`, name]}
               />
               <Legend
                 verticalAlign="bottom"

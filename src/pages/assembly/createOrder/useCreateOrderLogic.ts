@@ -276,6 +276,10 @@ export function useCreateOrderLogic({
     const trimmedDept = recipientLabel.trim();
     const trimmedRank = receiverRank.trim();
     const trimmedFullName = receiverName.trim();
+    // Парсим иерархию из recipientLabel: "Объединение / Соединение"
+    const hierParts = trimmedDept.split(' / ').map(s => s.trim()).filter(Boolean);
+    const orderUnitGroup = hierParts[0] || undefined;
+    const orderUnitFormation = hierParts[1] || undefined;
     if (trimmedDept && !recipientId) {
       // Создаём нового получателя
       const newPartner: Partner = {
@@ -283,6 +287,8 @@ export function useCreateOrderLogic({
         name: trimmedDept,
         type: 'recipient',
         department: trimmedDept || undefined,
+        unitGroup: orderUnitGroup,
+        unitFormation: orderUnitFormation,
         rank: trimmedRank || undefined,
         fullName: trimmedFullName || undefined,
         createdAt: new Date().toISOString(),
@@ -296,6 +302,8 @@ export function useCreateOrderLogic({
       if (existing) {
         const needsUpdate =
           (trimmedDept && existing.department !== trimmedDept) ||
+          (orderUnitGroup && existing.unitGroup !== orderUnitGroup) ||
+          (orderUnitFormation && existing.unitFormation !== orderUnitFormation) ||
           (trimmedRank && existing.rank !== trimmedRank) ||
           (trimmedFullName && existing.fullName !== trimmedFullName);
         if (needsUpdate) {
@@ -303,6 +311,8 @@ export function useCreateOrderLogic({
             ...existing,
             name: trimmedDept || existing.name,
             department: trimmedDept || existing.department,
+            unitGroup: orderUnitGroup || existing.unitGroup,
+            unitFormation: orderUnitFormation || existing.unitFormation,
             rank: trimmedRank || existing.rank,
             fullName: trimmedFullName || existing.fullName,
           };
@@ -321,6 +331,8 @@ export function useCreateOrderLogic({
         warehouseId: selectedWarehouseId || undefined,
         recipientId: finalRecipientId || undefined,
         recipientName: recipientLabel.trim() || undefined,
+        unitGroup: orderUnitGroup,
+        unitFormation: orderUnitFormation,
         receiverRank: receiverRank.trim() || undefined,
         receiverName: receiverName.trim() || undefined,
         issuerRank: undefined,
@@ -357,6 +369,8 @@ export function useCreateOrderLogic({
       warehouseId: selectedWarehouseId || undefined,
       recipientId: finalRecipientId || undefined,
       recipientName: recipientLabel.trim() || undefined,
+      unitGroup: orderUnitGroup,
+      unitFormation: orderUnitFormation,
       receiverRank: receiverRank.trim() || undefined,
       receiverName: receiverName.trim() || undefined,
       // «Затребовал» = «Получил»: дублируем поля чтобы старые

@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
@@ -81,30 +82,18 @@ export function CreateOrderHeaderFields({
         </div>
       )}
 
-      {/* Recipient autocomplete */}
-      <div className="space-y-1.5">
-        <Label>Структурное подразделение — получатель</Label>
-        <Autocomplete
-          value={recipientLabel}
-          onChange={v => { setRecipientLabel(v); setRecipientId(''); }}
-          onSelect={opt => {
-            setRecipientLabel(opt.label);
-            const pid = opt.id === '__new__' ? '' : opt.id;
-            setRecipientId(pid);
-            if (pid) {
-              const partner = state.partners.find(p => p.id === pid);
-              if (partner) {
-                if (partner.rank && !receiverRank.trim()) setReceiverRank(partner.rank);
-                if (partner.fullName && !receiverName.trim()) setReceiverName(partner.fullName);
-              }
-            }
-          }}
-          options={recipientOptions}
-          placeholder="Введите получателя..."
-          allowCustom
-        />
-        <p className="text-xs text-muted-foreground">Структурное подразделение — получатель (для накладной)</p>
-      </div>
+      {/* Recipient — каскадный выбор Объединение → Соединение */}
+      <RecipientHierarchyPicker
+        state={state}
+        recipientLabel={recipientLabel}
+        setRecipientLabel={setRecipientLabel}
+        setRecipientId={setRecipientId}
+        recipientOptions={recipientOptions}
+        receiverRank={receiverRank}
+        setReceiverRank={setReceiverRank}
+        receiverName={receiverName}
+        setReceiverName={setReceiverName}
+      />
 
       {/* Затребовал = Получил — отдельный блок убран по требованию.
           В заявку всё равно записываются оба поля (requesterRank/Name
@@ -137,5 +126,182 @@ export function CreateOrderHeaderFields({
         <Input value={comment} onChange={e => setComment(e.target.value)} placeholder="Примечание, приоритет..." />
       </div>
     </>
+  );
+}
+
+// ─── Каскадный выбор получателя: Объединение → Соединение ────────────────────
+type RecipientPickerProps = {
+  state: AppState;
+  recipientLabel: string;
+  setRecipientLabel: (v: string) => void;
+  setRecipientId: (v: string) => void;
+  recipientOptions: AutocompleteOption[];
+  receiverRank: string;
+  setReceiverRank: (v: string) => void;
+  receiverName: string;
+  setReceiverName: (v: string) => void;
+};
+
+function RecipientHierarchyPicker({
+  state,
+  recipientLabel, setRecipientLabel, setRecipientId,
+  recipientOptions,
+  receiverRank, setReceiverRank,
+  receiverName, setReceiverName,
+}: RecipientPickerProps) {
+  // Восстанавливаем начальные значения из recipientLabel при первой отрисовке
+  // (формат: "Объединение / Соединение [— ФИО]")
+  const initial = useMemo(() => {
+    const lbl = (recipientLabel || '').trim();
+    if (!lbl) return { group: '', formation: '' };
+    // Пробуем найти партнёра по name — у него уже сохранены unitGroup/unitFormation
+    const p = state.partners.find(pp => pp.type === 'recipient' && pp.name === lbl);
+    if (p?.unitGroup || p?.unitFormation) {
+      return { group: p.unitGroup || '', formation: p.unitFormation || '' };
+    }
+    // Парсим из department: "ГМП / 61 обрмп"
+    const dept = p?.department || lbl.split(' — ')[0] || '';
+    const parts = dept.split(' / ').map(s => s.trim()).filter(Boolean);
+    return { group: parts[0] || '', formation: parts[1] || '' };
+  }, [recipientLabel, state.partners]);
+
+  const [unitGroup, setUnitGroup] = useState(initial.group);
+  const [unitFormation, setUnitFormation] = useState(initial.formation);
+
+  // Все Объединения из справочника получателей
+  const groups = useMemo(() => {
+    const set = new Set<string>();
+    state.partners
+      .filter(p => p.type === 'recipient' && p.unitGroup)
+      .forEach(p => set.add((p.unitGroup as string).trim()));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [state.partners]);
+
+  // Соединения, относящиеся к выбранному Объединению
+  const formations = useMemo(() => {
+    if (!unitGroup) return [] as string[];
+    const set = new Set<string>();
+    state.partners
+      .filter(p => p.type === 'recipient' && p.unitGroup === unitGroup && p.unitFormation)
+      .forEach(p => set.add((p.unitFormation as string).trim()));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [state.partners, unitGroup]);
+
+  const applyHierarchy = (group: string, formation: string) => {
+    setUnitGroup(group);
+    setUnitFormation(formation);
+    const dept = [group, formation].filter(Boolean).join(' / ');
+    setRecipientLabel(dept);
+    // Найдём партнёра по совпадению иерархии
+    const p = state.partners.find(pp =>
+      pp.type === 'recipient' &&
+      (pp.unitGroup || '') === group &&
+      (pp.unitFormation || '') === formation
+    );
+    if (p) {
+      setRecipientId(p.id);
+      if (p.rank && !receiverRank.trim()) setReceiverRank(p.rank);
+      if (p.fullName && !receiverName.trim()) setReceiverName(p.fullName);
+    } else {
+      setRecipientId('');
+    }
+  };
+
+  return (
+    <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-3 space-y-3">
+      <div className="flex items-center gap-2 text-xs font-semibold text-primary uppercase tracking-wide">
+        <Icon name="Network" size={12} />
+        Структурное подразделение — получатель
+      </div>
+
+      {/* Объединения */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">Объединение</Label>
+        {groups.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-1.5">
+            {groups.map(g => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => applyHierarchy(g, '')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all
+                  ${unitGroup === g ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground border border-border'}`}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+        )}
+        <Input
+          value={unitGroup}
+          onChange={e => applyHierarchy(e.target.value, '')}
+          placeholder="Напр.: ГМП, ЧНП"
+          className="h-9"
+        />
+      </div>
+
+      {/* Соединения, привязанные к Объединению */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">Соединение</Label>
+        {formations.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-1.5">
+            {formations.map(f => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => applyHierarchy(unitGroup, f)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all
+                  ${unitFormation === f ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground border border-border'}`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        )}
+        <Input
+          value={unitFormation}
+          onChange={e => applyHierarchy(unitGroup, e.target.value)}
+          placeholder={unitGroup ? 'Напр.: 61 обрмп' : 'Сначала выберите Объединение'}
+          className="h-9"
+          disabled={!unitGroup}
+        />
+      </div>
+
+      {/* Свободный режим: вписать без иерархии (для совместимости со старыми получателями) */}
+      <details className="text-xs">
+        <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
+          Указать получателя из справочника напрямую
+        </summary>
+        <div className="mt-2">
+          <Autocomplete
+            value={recipientLabel}
+            onChange={v => { setRecipientLabel(v); setRecipientId(''); }}
+            onSelect={opt => {
+              setRecipientLabel(opt.label);
+              const pid = opt.id === '__new__' ? '' : opt.id;
+              setRecipientId(pid);
+              if (pid) {
+                const partner = state.partners.find(p => p.id === pid);
+                if (partner) {
+                  setUnitGroup(partner.unitGroup || '');
+                  setUnitFormation(partner.unitFormation || '');
+                  if (partner.rank && !receiverRank.trim()) setReceiverRank(partner.rank);
+                  if (partner.fullName && !receiverName.trim()) setReceiverName(partner.fullName);
+                }
+              }
+            }}
+            options={recipientOptions}
+            placeholder="Любое наименование..."
+            allowCustom
+          />
+        </div>
+      </details>
+
+      {(unitGroup || unitFormation || recipientLabel) && (
+        <div className="text-[11px] text-muted-foreground border-t border-border/40 pt-2">
+          В накладной: <span className="font-semibold text-foreground">{recipientLabel || '—'}</span>
+        </div>
+      )}
+    </div>
   );
 }

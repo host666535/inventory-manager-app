@@ -125,6 +125,11 @@ export type Partner = {
   rank?: string;
   fullName?: string;
   department?: string;
+  // Иерархия получателя для накладной: Объединение → Соединение.
+  // unitGroup — Объединение (ГМП, ЧНП и т.п.)
+  // unitFormation — Соединение (61 обрмп и т.п.), входит в Объединение.
+  unitGroup?: string;
+  unitFormation?: string;
   createdAt: string;
 };
 
@@ -611,8 +616,10 @@ export function getLeafLocations(state: AppState, warehouseId?: string): Locatio
 // Создаётся автоматически при создании склада и не может быть удалена.
 
 export function createFloorLocation(warehouseId: string): Location {
+  // Детерминированный id — два независимых запуска миграции
+  // не создадут дубликат, upsert просто перепишет ту же запись.
   return {
-    id: `loc-floor-${warehouseId}-${Date.now()}`,
+    id: `loc-floor-${warehouseId}`,
     name: 'Пол',
     warehouseId,
     isFloor: true,
@@ -631,23 +638,79 @@ export function getFloorLocationId(state: AppState, warehouseId?: string): strin
 }
 
 /**
- * Проверяет, что у каждого склада есть локация «Пол». Если нет — создаёт.
- * Возвращает обновлённое состояние и список созданных Floor-локаций
- * (вызывающему коду нужно их отправить на сервер через crudAction).
+ * Гарантирует, что у каждого склада ровно ОДНА локация «Пол».
+ *  - Если Пола нет — создаёт.
+ *  - Если Полов несколько — оставляет первый, остальные сливает в него
+ *    (переносит товары/items.locationId/locationStocks/itemDependencies),
+ *    а сами лишние локации помечает на удаление.
+ *
+ * Возвращает:
+ *  - state: обновлённое состояние
+ *  - created: Floor-локации, которые надо отправить на сервер (upsert_location)
+ *  - removedIds: id локаций, которые надо удалить на сервере (delete_location)
  */
-export function ensureFloorLocations(state: AppState): { state: AppState; created: Location[] } {
+export function ensureFloorLocations(state: AppState): {
+  state: AppState;
+  created: Location[];
+  removedIds: string[];
+} {
   const created: Location[] = [];
-  const locations = [...state.locations];
+  const removedIds: string[] = [];
+  let locations = [...state.locations];
+  let items = state.items;
+  let locationStocks = state.locationStocks;
+
   for (const wh of (state.warehouses || [])) {
-    const has = locations.some(l => l.isFloor && l.warehouseId === wh.id);
-    if (!has) {
+    const floors = locations.filter(l => l.isFloor && l.warehouseId === wh.id);
+
+    if (floors.length === 0) {
       const floor = createFloorLocation(wh.id);
       locations.push(floor);
       created.push(floor);
+      continue;
     }
+
+    if (floors.length === 1) continue;
+
+    // Дубль: оставляем первый, остальные сливаем в него
+    const keep = floors[0];
+    const dropIds = new Set(floors.slice(1).map(f => f.id));
+
+    // Перенос items.locationId -> keep.id
+    if (items.some(it => dropIds.has(it.locationId))) {
+      items = items.map(it => dropIds.has(it.locationId) ? { ...it, locationId: keep.id } : it);
+    }
+
+    // Слияние locationStocks (суммируем quantity по itemId на keep)
+    const mergedStocks: LocationStock[] = [];
+    const byKey = new Map<string, LocationStock>();
+    for (const ls of locationStocks) {
+      const targetLocId = dropIds.has(ls.locationId) ? keep.id : ls.locationId;
+      const key = `${ls.itemId}::${targetLocId}`;
+      const existing = byKey.get(key);
+      if (existing) {
+        existing.quantity += ls.quantity;
+      } else {
+        const entry = { itemId: ls.itemId, locationId: targetLocId, quantity: ls.quantity };
+        byKey.set(key, entry);
+        mergedStocks.push(entry);
+      }
+    }
+    locationStocks = mergedStocks;
+
+    // Удаляем лишние локации
+    locations = locations.filter(l => !dropIds.has(l.id));
+    dropIds.forEach(id => removedIds.push(id));
   }
-  if (created.length === 0) return { state, created };
-  return { state: { ...state, locations }, created };
+
+  if (created.length === 0 && removedIds.length === 0) {
+    return { state, created, removedIds };
+  }
+  return {
+    state: { ...state, locations, items, locationStocks },
+    created,
+    removedIds,
+  };
 }
 
 export function getLocationStock(state: AppState, itemId: string, locationId: string): number {
