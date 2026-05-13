@@ -156,7 +156,7 @@ export default function ScannerModal({ open, onClose, onConfirm, title = 'Ска
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md p-0 overflow-hidden animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,700px)] p-0 overflow-hidden animate-scale-in">
         <DialogHeader className="px-5 pt-5 pb-0">
           <DialogTitle className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">

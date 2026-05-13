@@ -41,7 +41,7 @@ export function DocDetailModal({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl xl:max-w-4xl w-full max-h-[94vh] overflow-y-auto animate-scale-in p-0">
+      <DialogContent className="max-w-[min(96vw,1200px)] xl:max-w-[min(96vw,1400px)] w-full max-h-[94vh] overflow-y-auto animate-scale-in p-0">
         {/* Top bar with item info */}
         <div className="sticky top-0 z-10 bg-card border-b border-border px-6 py-4">
           <div className="flex items-start justify-between gap-4">

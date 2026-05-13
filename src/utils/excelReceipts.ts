@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import {
   AppState, Receipt, ReceiptLine, ReceiptCustomField,
   Item, Partner, Operation, generateId,
-  updateWarehouseStock,
+  updateWarehouseStock, getFloorLocationId,
 } from '@/data/store';
 
 // Фиксированный порядок колонок (как в макете пользователя).
@@ -329,15 +329,12 @@ export function buildReceiptsFromRows(
         itemId = existingItem.id;
         unit = existingItem.unit;
       } else {
-        const leafLoc = next.locations.find(
-          l => !next.locations.some(ch => ch.parentId === l.id)
-            && (!l.warehouseId || l.warehouseId === warehouseId),
-        );
+        const floorLocId = getFloorLocationId(next, warehouseId);
         const ni: Item = {
           id: generateId(),
           name: row.itemName,
           categoryId: next.categories[0]?.id || '',
-          locationId: leafLoc?.id || '',
+          locationId: floorLocId,
           unit: 'шт',
           quantity: 0,
           lowStockThreshold: 5,

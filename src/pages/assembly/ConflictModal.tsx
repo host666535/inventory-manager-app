@@ -24,7 +24,7 @@ export function ConflictModal({
 }) {
   return (
     <Dialog open onOpenChange={onCancel}>
-      <DialogContent className="max-w-lg animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,900px)] animate-scale-in">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-destructive/15 text-destructive flex items-center justify-center shrink-0">

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import Icon from '@/components/ui/icon';
-import { Item, AppState, AssetType, crudAction } from '@/data/store';
+import { Item, AppState, AssetType, ItemDependency, crudAction } from '@/data/store';
 import { findDuplicateItem } from '@/data/validation';
 import { toast } from 'sonner';
 import { useItemPhoto } from '@/hooks/useItemPhoto';
@@ -135,7 +135,7 @@ export default function ItemDetailModal({ item, state, onStateChange, onClose }:
   return (
     <>
       <Dialog open={!!item} onOpenChange={onClose}>
-        <DialogContent className="max-w-xl lg:max-w-2xl xl:max-w-3xl p-0 overflow-hidden animate-scale-in max-h-[95vh] flex flex-col">
+        <DialogContent className="max-w-[min(96vw,1100px)] lg:max-w-[min(96vw,1200px)] xl:max-w-[min(96vw,1300px)] p-0 overflow-hidden animate-scale-in max-h-[95vh] flex flex-col">
           {/* Header image */}
           <ItemDetailHeader
             liveItem={liveItem}

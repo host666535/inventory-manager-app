@@ -100,7 +100,7 @@ type Props = {
 export default function LabelPreviewDialog({ open, onOpenChange, labelData, labelSize }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,1400px)] max-h-[90vh] overflow-y-auto animate-scale-in">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">

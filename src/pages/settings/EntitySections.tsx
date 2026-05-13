@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
-import { AppState, crudAction, Category, Location, Warehouse, generateId } from '@/data/store';
+import { AppState, crudAction, Category, Location, Warehouse, generateId, createFloorLocation } from '@/data/store';
 import { findDuplicateCategory, findDuplicateWarehouse } from '@/data/validation';
 import { warehouseFormSchema, categoryFormSchema, firstError } from '@/data/schemas';
 
@@ -39,8 +39,16 @@ export function WarehousesSection({ state, onStateChange, onDeleteConfirm }: Ent
       description: newWhDesc.trim() || undefined,
       createdAt: new Date().toISOString(),
     };
-    const next = { ...state, warehouses: [...(state.warehouses || []), wh] };
-    onStateChange(next); crudAction('upsert_warehouse', { warehouse: wh });
+    // Создаём системную локацию «Пол» по умолчанию.
+    const floor: Location = createFloorLocation(wh.id);
+    const next = {
+      ...state,
+      warehouses: [...(state.warehouses || []), wh],
+      locations: [...state.locations, floor],
+    };
+    onStateChange(next);
+    crudAction('upsert_warehouse', { warehouse: wh });
+    crudAction('upsert_location', { location: floor });
     setNewWhName(''); setNewWhAddress(''); setNewWhDesc('');
     toast.success(`Склад «${wh.name}» создан`);
   };
@@ -358,6 +366,11 @@ export function LocationsSection({ state, onStateChange, onDeleteConfirm }: Enti
   };
 
   const deleteLocation = (id: string) => {
+    const target = state.locations.find(l => l.id === id);
+    if (target?.isFloor) {
+      toast.error('Локацию «Пол» нельзя удалить — она системная');
+      return;
+    }
     const fallback = state.locations.find(l => l.id !== id)?.id || '';
     const children = state.locations.filter(l => l.parentId === id);
     const idsToRemove = [id, ...children.map(c => c.id)];

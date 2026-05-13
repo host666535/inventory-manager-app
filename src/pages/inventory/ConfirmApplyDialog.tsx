@@ -35,7 +35,7 @@ type Props = {
 export default function ConfirmApplyDialog({ open, onOpenChange, summary, applyCorrections }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg animate-scale-in max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-[min(96vw,900px)] animate-scale-in max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">

@@ -77,7 +77,7 @@ export function MoveItemModal({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-sm animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,500px)] animate-scale-in">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">

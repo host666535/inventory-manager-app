@@ -223,7 +223,7 @@ export default function OperationModal({ open, onClose, item, type, performedBy,
   return (
     <>
       <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent className="max-w-md animate-scale-in max-h-[92vh] overflow-y-auto">
+        <DialogContent className="max-w-[min(96vw,700px)] animate-scale-in max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2.5">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { AutocompleteOption } from '@/components/Autocomplete';
 import {
   AppState, crudAction, generateId,
@@ -8,6 +8,31 @@ import {
 import { ConflictInfo } from '../ConflictModal';
 
 export type OrderLine = { id: string; itemId: string; itemLabel: string; qty: string };
+
+const DRAFT_KEY = 'inventory.draftCreateOrder.v1';
+
+type Draft = {
+  number: string;
+  selectedWarehouseId: string;
+  recipientLabel: string;
+  recipientId: string;
+  receiverRank: string;
+  receiverName: string;
+  comment: string;
+  lines: OrderLine[];
+};
+
+function loadDraft(): Draft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw) as Draft;
+    if (!obj || !Array.isArray(obj.lines)) return null;
+    return obj;
+  } catch {
+    return null;
+  }
+}
 
 export function useCreateOrderLogic({
   state, onStateChange, onClose, editOrder,
@@ -39,6 +64,69 @@ export function useCreateOrderLogic({
   );
   const [showConflict, setShowConflict] = useState(false);
 
+  // ─── Черновик заявки (только для НОВОЙ, не для редактирования) ─────────────
+  // При маунте — если есть незавершённый черновик, спрашиваем восстановить.
+  const draftRestoredRef = useRef(false);
+  useEffect(() => {
+    if (isEdit) return;            // в режиме редактирования черновик не применяем
+    if (draftRestoredRef.current) return;
+    draftRestoredRef.current = true;
+    const draft = loadDraft();
+    if (!draft) return;
+    const hasContent = draft.recipientLabel || draft.receiverName ||
+      draft.comment || (draft.lines && draft.lines.some(l => l.itemId));
+    if (!hasContent) {
+      localStorage.removeItem(DRAFT_KEY);
+      return;
+    }
+    if (typeof window !== 'undefined' && window.confirm('Найден незавершённый черновик заявки. Продолжить заполнение?')) {
+      if (draft.number) setNumber(draft.number);
+      if (draft.selectedWarehouseId) setSelectedWarehouseId(draft.selectedWarehouseId);
+      if (draft.recipientLabel) setRecipientLabel(draft.recipientLabel);
+      if (draft.recipientId) setRecipientId(draft.recipientId);
+      if (draft.receiverRank) setReceiverRank(draft.receiverRank);
+      if (draft.receiverName) setReceiverName(draft.receiverName);
+      if (draft.comment) setComment(draft.comment);
+      if (Array.isArray(draft.lines) && draft.lines.length > 0) setLines(draft.lines);
+    } else {
+      localStorage.removeItem(DRAFT_KEY);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Сохранение черновика с debounce 300мс.
+  useEffect(() => {
+    if (isEdit) return;
+    const t = setTimeout(() => {
+      const draft: Draft = {
+        number, selectedWarehouseId, recipientLabel, recipientId,
+        receiverRank, receiverName, comment, lines,
+      };
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch { /* localStorage может быть переполнен — игнорируем */ }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [isEdit, number, selectedWarehouseId, recipientLabel, recipientId, receiverRank, receiverName, comment, lines]);
+
+  const clearDraft = () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* noop */ }
+  };
+
+  const resetForm = () => {
+    setNumber(`ЗС-${String(state.orderCounter).padStart(3, '0')}`);
+    setComment('');
+    setRecipientLabel('');
+    setRecipientId('');
+    setReceiverRank('');
+    setReceiverName('');
+    setRequesterRank('');
+    setRequesterName('');
+    setSelectedWarehouseId(state.warehouses?.length === 1 ? state.warehouses[0].id : '');
+    setLines([{ id: generateId(), itemId: '', itemLabel: '', qty: '1' }]);
+    clearDraft();
+  };
+
   const recipientOptions: AutocompleteOption[] = useMemo(() =>
     state.partners.filter(p => p.type === 'recipient').map(p => ({
       id: p.id,
@@ -66,8 +154,42 @@ export function useCreateOrderLogic({
 
   const addLine = () => setLines(l => [...l, { id: generateId(), itemId: '', itemLabel: '', qty: '1' }]);
   const removeLine = (id: string) => setLines(l => l.filter(ln => ln.id !== id));
-  const updateLine = (id: string, patch: Partial<OrderLine>) =>
-    setLines(l => l.map(ln => ln.id === id ? { ...ln, ...patch } : ln));
+  const updateLine = (id: string, patch: Partial<OrderLine>) => {
+    setLines(prev => {
+      const next = prev.map(ln => ln.id === id ? { ...ln, ...patch } : ln);
+
+      // ─── Авто-подтягивание зависимостей (комплекты) ──────────────────────
+      // Когда в строку только что выбрали itemId — добавляем зависимые позиции.
+      // НЕ пересчитываем при изменении только qty: пользователь правит сам.
+      const justSelectedItemId = patch.itemId && patch.itemId !== prev.find(ln => ln.id === id)?.itemId
+        ? patch.itemId
+        : null;
+      if (!justSelectedItemId) return next;
+
+      const item = state.items.find(i => i.id === justSelectedItemId);
+      const deps = item?.dependencies;
+      if (!deps || deps.length === 0) return next;
+
+      const baseQty = parseInt(patch.qty || next.find(ln => ln.id === id)?.qty || '1') || 1;
+      const existingItemIds = new Set(next.filter(ln => ln.itemId).map(ln => ln.itemId));
+      const toAdd: OrderLine[] = [];
+      for (const dep of deps) {
+        if (!dep.itemId || dep.itemId === justSelectedItemId) continue;
+        if (existingItemIds.has(dep.itemId)) continue;
+        const depItem = state.items.find(i => i.id === dep.itemId);
+        if (!depItem) continue;
+        const depQty = Math.max(1, Math.ceil(baseQty * (dep.ratio || 1)));
+        toAdd.push({
+          id: generateId(),
+          itemId: dep.itemId,
+          itemLabel: depItem.name,
+          qty: String(depQty),
+        });
+        existingItemIds.add(dep.itemId);
+      }
+      return toAdd.length > 0 ? [...next, ...toAdd] : next;
+    });
+  };
 
   const validLines = lines.filter(l => l.itemId && parseInt(l.qty) > 0);
 
@@ -203,8 +325,10 @@ export function useCreateOrderLogic({
         receiverName: receiverName.trim() || undefined,
         issuerRank: undefined,
         issuerName: undefined,
-        requesterRank: requesterRank.trim() || undefined,
-        requesterName: requesterName.trim() || undefined,
+        // «Затребовал» = «Получил»: дублируем поля чтобы не сломать
+        // схемы выгрузки/импорта, использующие requester*.
+        requesterRank: receiverRank.trim() || undefined,
+        requesterName: receiverName.trim() || undefined,
         comment: comment.trim() || undefined,
         updatedAt: new Date().toISOString(),
         items: orderItems,
@@ -219,6 +343,7 @@ export function useCreateOrderLogic({
       if (partnerToSync) {
         crudAction('upsert_partner', { partner: partnerToSync });
       }
+      clearDraft();
       onClose();
       return;
     }
@@ -234,8 +359,10 @@ export function useCreateOrderLogic({
       recipientName: recipientLabel.trim() || undefined,
       receiverRank: receiverRank.trim() || undefined,
       receiverName: receiverName.trim() || undefined,
-      requesterRank: requesterRank.trim() || undefined,
-      requesterName: requesterName.trim() || undefined,
+      // «Затребовал» = «Получил»: дублируем поля чтобы старые
+      // схемы выгрузки (которые ожидают requester*) не ломались.
+      requesterRank: receiverRank.trim() || undefined,
+      requesterName: receiverName.trim() || undefined,
       comment: comment.trim() || undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -254,6 +381,7 @@ export function useCreateOrderLogic({
     if (partnerToSync) {
       crudAction('upsert_partner', { partner: partnerToSync });
     }
+    clearDraft();
     onClose();
   };
 
@@ -288,5 +416,7 @@ export function useCreateOrderLogic({
     canCreate,
     doCreate,
     handleSubmit,
+    resetForm,
+    clearDraft,
   };
 }

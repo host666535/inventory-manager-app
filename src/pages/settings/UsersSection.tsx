@@ -94,7 +94,7 @@ export default function UsersSection() {
 
       {showAddUser && (
         <Dialog open onOpenChange={() => setShowAddUser(false)}>
-          <DialogContent className="max-w-sm">
+          <DialogContent className="max-w-[min(96vw,500px)]">
             <DialogHeader><DialogTitle>Новый пользователь</DialogTitle></DialogHeader>
             <div className="space-y-3 pt-2">
               <div className="space-y-1">
@@ -142,7 +142,7 @@ export default function UsersSection() {
 
       {changePwUserId && (
         <Dialog open onOpenChange={() => setChangePwUserId(null)}>
-          <DialogContent className="max-w-sm">
+          <DialogContent className="max-w-[min(96vw,500px)]">
             <DialogHeader><DialogTitle>Сменить пароль</DialogTitle></DialogHeader>
             <div className="space-y-3 pt-2">
               <div className="space-y-1">

@@ -13,6 +13,12 @@ export type Location = {
   parentId?: string;
   description?: string;
   warehouseId?: string;   // к какому складу принадлежит стеллаж/полка
+  isFloor?: boolean;      // системная локация «Пол» — нельзя удалить
+};
+
+export type ItemDependency = {
+  itemId: string;          // ID связанной позиции
+  ratio: number;           // сколько штук связанной позиции на 1 шт основной
 };
 
 export type Attachment = {
@@ -39,6 +45,7 @@ export type Item = {
   imageUrl?: string;
   createdAt: string;
   attachments?: Attachment[];
+  dependencies?: ItemDependency[];   // зависимости/комплекты — что подтягивать вместе
 };
 
 export type OperationType = 'in' | 'out';
@@ -597,6 +604,50 @@ export function getLeafLocations(state: AppState, warehouseId?: string): Locatio
     !state.locations.some(ch => ch.parentId === l.id) &&
     (!warehouseId || !l.warehouseId || l.warehouseId === warehouseId)
   );
+}
+
+// ─── Floor location helpers ──────────────────────────────────────────────────
+// «Пол» — системная локация на складе, куда складываются товары без явной полки.
+// Создаётся автоматически при создании склада и не может быть удалена.
+
+export function createFloorLocation(warehouseId: string): Location {
+  return {
+    id: `loc-floor-${warehouseId}-${Date.now()}`,
+    name: 'Пол',
+    warehouseId,
+    isFloor: true,
+    description: 'Локация по умолчанию — товары без явной полки',
+  };
+}
+
+export function getFloorLocationId(state: AppState, warehouseId?: string): string {
+  if (warehouseId) {
+    const f = state.locations.find(l => l.isFloor && l.warehouseId === warehouseId);
+    if (f) return f.id;
+  }
+  const anyFloor = state.locations.find(l => l.isFloor);
+  if (anyFloor) return anyFloor.id;
+  return state.locations.find(l => !state.locations.some(ch => ch.parentId === l.id))?.id || '';
+}
+
+/**
+ * Проверяет, что у каждого склада есть локация «Пол». Если нет — создаёт.
+ * Возвращает обновлённое состояние и список созданных Floor-локаций
+ * (вызывающему коду нужно их отправить на сервер через crudAction).
+ */
+export function ensureFloorLocations(state: AppState): { state: AppState; created: Location[] } {
+  const created: Location[] = [];
+  const locations = [...state.locations];
+  for (const wh of (state.warehouses || [])) {
+    const has = locations.some(l => l.isFloor && l.warehouseId === wh.id);
+    if (!has) {
+      const floor = createFloorLocation(wh.id);
+      locations.push(floor);
+      created.push(floor);
+    }
+  }
+  if (created.length === 0) return { state, created };
+  return { state: { ...state, locations }, created };
 }
 
 export function getLocationStock(state: AppState, itemId: string, locationId: string): number {

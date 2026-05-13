@@ -166,7 +166,7 @@ export default function QRScanner({ open, onClose, onResult }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-sm w-full animate-scale-in p-0 overflow-hidden">
+      <DialogContent className="max-w-[min(96vw,500px)] w-full animate-scale-in p-0 overflow-hidden">
         <DialogHeader className="px-5 pt-5 pb-0">
           <DialogTitle className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">

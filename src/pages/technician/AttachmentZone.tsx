@@ -112,7 +112,7 @@ export function AttachmentZone({
       {/* Image preview modal */}
       {preview && (
         <Dialog open onOpenChange={() => setPreview(null)}>
-          <DialogContent className="max-w-2xl p-2">
+          <DialogContent className="max-w-[min(96vw,1200px)] p-2">
             <img src={preview.dataUrl} alt={preview.name} className="w-full rounded-xl object-contain max-h-[80vh]" />
             <p className="text-center text-sm text-muted-foreground mt-1">{preview.name}</p>
           </DialogContent>

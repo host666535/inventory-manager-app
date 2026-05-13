@@ -149,6 +149,11 @@ export function useWarehouseMap(
   }, [dragState, state.locations]);
 
   const handleDeleteLocation = (locId: string) => {
+    const loc = state.locations.find(l => l.id === locId);
+    if (loc?.isFloor) {
+      alert('Локацию «Пол» нельзя удалить — она системная.');
+      return;
+    }
     const hasStock = (state.locationStocks || []).some(ls => ls.locationId === locId && ls.quantity > 0);
     if (hasStock) {
       alert('Нельзя удалить локацию, в которой есть товары. Сначала переместите или спишите все товары.');

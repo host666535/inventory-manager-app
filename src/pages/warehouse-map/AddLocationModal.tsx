@@ -144,7 +144,7 @@ export function AddLocationModal({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-sm animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,500px)] animate-scale-in">
         <DialogHeader>
           <DialogTitle>{editLocation ? 'Редактировать локацию' : 'Новая локация'}</DialogTitle>
         </DialogHeader>

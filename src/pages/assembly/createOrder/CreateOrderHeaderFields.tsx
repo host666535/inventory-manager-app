@@ -34,10 +34,15 @@ export function CreateOrderHeaderFields({
   recipientOptions,
   receiverRank, setReceiverRank,
   receiverName, setReceiverName,
-  requesterRank, setRequesterRank,
-  requesterName, setRequesterName,
+  // requesterRank/Name больше не редактируются вручную —
+  // они автоматически дублируются из receiver* в логике сохранения.
+  requesterRank: _requesterRank,
+  setRequesterRank: _setRequesterRank,
+  requesterName: _requesterName,
+  setRequesterName: _setRequesterName,
   comment, setComment,
 }: Props) {
+  void _requesterRank; void _setRequesterRank; void _requesterName; void _setRequesterName;
   return (
     <>
       {/* Number */}
@@ -101,23 +106,9 @@ export function CreateOrderHeaderFields({
         <p className="text-xs text-muted-foreground">Структурное подразделение — получатель (для накладной)</p>
       </div>
 
-      {/* Requester for invoice */}
-      <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">
-        <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          <Icon name="UserPlus" size={12} />
-          Затребовал (кто запросил ТМЦ)
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Должность</Label>
-            <Input value={requesterRank} onChange={e => setRequesterRank(e.target.value)} placeholder="Напр.: командир взвода" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">ФИО</Label>
-            <Input value={requesterName} onChange={e => setRequesterName(e.target.value)} placeholder="Сидоров С.С." />
-          </div>
-        </div>
-      </div>
+      {/* Затребовал = Получил — отдельный блок убран по требованию.
+          В заявку всё равно записываются оба поля (requesterRank/Name
+          дублируются из receiverRank/Name в logic.handleSubmit). */}
 
       {/* Receiver for invoice */}
       <div className="rounded-xl border-2 border-success/30 bg-success/5 p-3 space-y-2">

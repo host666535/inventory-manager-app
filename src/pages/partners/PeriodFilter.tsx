@@ -89,7 +89,7 @@ export function PartnerHistory({ partner, state, periodFrom, periodTo, onClose }
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,1200px)] max-h-[85vh] overflow-y-auto animate-scale-in">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0
@@ -221,7 +221,7 @@ export function AddPartnerModal({ type, partner, onSave, onClose }: {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-md animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,700px)] animate-scale-in">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Редактировать' : 'Добавить'} {type === 'supplier' ? 'поставщика' : 'получателя'}</DialogTitle>
         </DialogHeader>

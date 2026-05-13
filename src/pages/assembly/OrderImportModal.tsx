@@ -89,7 +89,7 @@ export function OrderImportModal({ state, onStateChange, onClose }: Props) {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-lg animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,900px)] animate-scale-in">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon name="Upload" size={16} className="text-primary" />

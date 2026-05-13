@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import Icon from "@/components/ui/icon";
 import { AppState } from "@/data/store";
+import AdvancedAnalytics from "@/pages/dashboard/AdvancedAnalytics";
 
 type Props = {
   state: AppState;
@@ -333,6 +334,16 @@ export default function DashboardPage({ state }: Props) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Расширенная аналитика — сворачиваемые секции */}
+      <div className="pt-2">
+        <div className="flex items-center gap-2 mb-3">
+          <Icon name="BarChart3" size={18} className="text-primary" />
+          <h2 className="text-lg font-bold">Детальная аналитика</h2>
+          <span className="text-xs text-muted-foreground">— фильтры и срезы по периодам, получателям, складам, поставщикам</span>
+        </div>
+        <AdvancedAnalytics state={state} />
       </div>
     </div>
   );

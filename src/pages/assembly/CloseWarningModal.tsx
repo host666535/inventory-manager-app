@@ -9,7 +9,7 @@ export default function CloseWarningModal({ order, state, onConfirm, onCancel }:
   const unfinished = order.items.filter(oi => oi.status !== 'done');
   return (
     <Dialog open onOpenChange={onCancel}>
-      <DialogContent className="max-w-sm animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,500px)] animate-scale-in">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-warning/15 text-warning flex items-center justify-center shrink-0">

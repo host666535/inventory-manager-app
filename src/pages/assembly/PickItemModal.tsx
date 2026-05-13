@@ -101,7 +101,7 @@ export default function PickItemModal({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-md animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,700px)] animate-scale-in">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center">

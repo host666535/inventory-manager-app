@@ -39,7 +39,7 @@ export default function ChangePasswordDialog({ open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) close(); }}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-[min(96vw,500px)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon name="KeyRound" size={18} />

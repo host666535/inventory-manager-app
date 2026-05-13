@@ -70,7 +70,7 @@ export function AddItemToLocationModal({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-sm animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,500px)] animate-scale-in">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon name="MapPin" size={16} className="text-primary" />

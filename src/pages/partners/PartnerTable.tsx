@@ -212,7 +212,7 @@ export function PartnerTable({ partners, type, state, onStateChange, periodFrom,
       {editPartner && <AddPartnerModal type={type} partner={editPartner} onSave={handleEdit} onClose={() => setEditPartner(null)} />}
       {deleteConfirm && (
         <Dialog open onOpenChange={() => setDeleteConfirm(null)}>
-          <DialogContent className="max-w-sm animate-scale-in">
+          <DialogContent className="max-w-[min(96vw,500px)] animate-scale-in">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-destructive/15 text-destructive flex items-center justify-center shrink-0">

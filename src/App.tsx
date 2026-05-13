@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { AppState, getInitialEmptyState, loadStateFromServer, setCrudErrorHandler, checkServerUpdate } from '@/data/store';
+import { AppState, getInitialEmptyState, loadStateFromServer, setCrudErrorHandler, checkServerUpdate, ensureFloorLocations, crudAction } from '@/data/store';
 import { toast } from 'sonner';
 import Layout, { Page } from '@/components/Layout';
 import CatalogPage from '@/pages/CatalogPage';
@@ -132,8 +132,16 @@ export default function App() {
     try {
       const result = await loadStateFromServer();
       if (!result) return false;
-      setState(result.state);
+      // Авто-миграция: гарантируем что у каждого склада есть локация «Пол».
+      const { state: ensured, created } = ensureFloorLocations(result.state);
+      setState(ensured);
       lastUpdatedRef.current = result.updatedAt || '';
+      // Если создали новые Floor-локации — отправляем на сервер фоном.
+      if (created.length > 0) {
+        created.forEach(floor => {
+          crudAction('upsert_location', { location: floor }).catch(() => { /* noop */ });
+        });
+      }
       return true;
     } finally {
       reloadingRef.current = false;

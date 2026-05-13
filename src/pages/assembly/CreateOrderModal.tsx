@@ -20,7 +20,7 @@ export function CreateOrderModal({
   return (
     <>
       <Dialog open onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl xl:max-w-4xl max-h-[94vh] overflow-y-auto animate-scale-in">
+        <DialogContent className="max-w-[min(96vw,1200px)] xl:max-w-[min(96vw,1400px)] max-h-[94vh] overflow-y-auto animate-scale-in">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
@@ -67,6 +67,20 @@ export function CreateOrderModal({
             />
 
             <div className="flex gap-2 pt-1">
+              {!logic.isEdit && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (typeof window !== 'undefined' && window.confirm('Очистить все поля? Черновик будет удалён.')) {
+                      logic.resetForm();
+                    }
+                  }}
+                  className="gap-1.5"
+                >
+                  <Icon name="Trash2" size={14} />
+                  Очистить
+                </Button>
+              )}
               <Button variant="outline" onClick={onClose} className="flex-1">Отмена</Button>
               <Button onClick={logic.handleSubmit} disabled={!logic.canCreate} className="flex-1">
                 <Icon name={logic.isEdit ? 'Save' : 'Plus'} size={15} className="mr-1.5" />

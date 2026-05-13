@@ -8,7 +8,7 @@ import Autocomplete, { AutocompleteOption } from '@/components/Autocomplete';
 import {
   AppState, crudAction, generateId,
   Receipt, ReceiptLine, ReceiptCustomField,
-  Attachment, Partner, Item,
+  Attachment, Partner, Item, getFloorLocationId,
 } from '@/data/store';
 import { UNITS } from '@/constants/units';
 import { findDuplicateItem } from '@/data/validation';
@@ -173,12 +173,12 @@ export function NewReceiptModal({
         if (existingDup) {
           itemId = existingDup.id;
         } else {
-          const leafLoc = next.locations.find(l => !next.locations.some(ch => ch.parentId === l.id));
+          const floorLocId = getFloorLocationId(next, warehouseId);
           const newItem: Item = {
             id: generateId(),
             name: line.itemLabel.trim(),
             categoryId,
-            locationId: leafLoc?.id || '',
+            locationId: floorLocId,
             description: line.description || undefined,
             unit: line.unit,
             quantity: 0,
@@ -249,7 +249,7 @@ export function NewReceiptModal({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl xl:max-w-5xl 2xl:max-w-6xl max-h-[94vh] overflow-y-auto animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,1300px)] xl:max-w-[min(96vw,1500px)] 2xl:max-w-[min(96vw,1600px)] max-h-[94vh] overflow-y-auto animate-scale-in">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">

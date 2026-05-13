@@ -46,7 +46,7 @@ export default function ServerUrlDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-[min(96vw,500px)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon name="Server" size={18} className="text-primary" />

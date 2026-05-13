@@ -114,6 +114,74 @@ export default function HistoryPage({ state }: Props) {
     setSearch(''); setTypeFilter('all'); setDateFrom(''); setDateTo(''); setCategoryFilter('all'); setWarehouseFilter('all');
   };
 
+  // ─── Быстрые периоды ──────────────────────────────────────────────────────
+  const setQuickPeriod = (period: 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all') => {
+    if (period === 'all') {
+      setDateFrom(''); setDateTo('');
+      return;
+    }
+    const today = new Date();
+    const to = today.toISOString().slice(0, 10);
+    const from = new Date(today);
+    if (period === 'today') {
+      // оставляем сегодня
+    } else if (period === 'week') {
+      from.setDate(today.getDate() - 6);
+    } else if (period === 'month') {
+      from.setDate(today.getDate() - 29);
+    } else if (period === 'quarter') {
+      from.setDate(today.getDate() - 89);
+    } else if (period === 'year') {
+      from.setDate(today.getDate() - 364);
+    }
+    setDateFrom(from.toISOString().slice(0, 10));
+    setDateTo(to);
+  };
+
+  const activePeriod = useMemo((): 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all' | 'custom' => {
+    if (!dateFrom && !dateTo) return 'all';
+    if (!dateFrom || !dateTo) return 'custom';
+    const today = new Date().toISOString().slice(0, 10);
+    if (dateTo !== today) return 'custom';
+    const dFrom = new Date(dateFrom);
+    const dToday = new Date(today);
+    const diff = Math.round((dToday.getTime() - dFrom.getTime()) / 86400000);
+    if (diff === 0) return 'today';
+    if (diff === 6) return 'week';
+    if (diff === 29) return 'month';
+    if (diff === 89) return 'quarter';
+    if (diff === 364) return 'year';
+    return 'custom';
+  }, [dateFrom, dateTo]);
+
+  // ─── Сводка по позициям за выбранный период (расход) ──────────────────────
+  const periodSummary = useMemo(() => {
+    type Row = { itemId: string; itemName: string; unit: string; categoryName: string; categoryColor: string; inQty: number; outQty: number };
+    const rows = new Map<string, Row>();
+    for (const op of enriched) {
+      const item = op.item;
+      if (!item) continue;
+      let row = rows.get(op.itemId);
+      if (!row) {
+        row = {
+          itemId: op.itemId,
+          itemName: item.name,
+          unit: item.unit,
+          categoryName: op.category?.name || '—',
+          categoryColor: op.category?.color || '#888',
+          inQty: 0,
+          outQty: 0,
+        };
+        rows.set(op.itemId, row);
+      }
+      if (op.type === 'in') row.inQty += op.quantity;
+      else row.outQty += op.quantity;
+    }
+    return Array.from(rows.values()).sort((a, b) => (b.outQty + b.inQty) - (a.outQty + a.inQty));
+  }, [enriched]);
+
+  const [showPeriodSummary, setShowPeriodSummary] = useState(false);
+
   return (
     <div className="space-y-5 pb-20 md:pb-0">
       <div className="flex items-center justify-between">
@@ -293,6 +361,32 @@ export default function HistoryPage({ state }: Props) {
           )}
         </div>
 
+        {/* Быстрые периоды */}
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            { id: 'today', label: 'Сегодня' },
+            { id: 'week', label: '7 дней' },
+            { id: 'month', label: '30 дней' },
+            { id: 'quarter', label: '90 дней' },
+            { id: 'year', label: 'Год' },
+            { id: 'all', label: 'Всё время' },
+          ].map(p => (
+            <button
+              key={p.id}
+              onClick={() => setQuickPeriod(p.id as 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all')}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all
+                ${activePeriod === p.id ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground border border-border'}`}
+            >
+              {p.label}
+            </button>
+          ))}
+          {activePeriod === 'custom' && (
+            <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-primary/10 text-primary border border-primary/30">
+              Свой период
+            </span>
+          )}
+        </div>
+
         {/* Search + dates */}
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-0 sm:min-w-48">
@@ -306,6 +400,62 @@ export default function HistoryPage({ state }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Сводка за выбранный период */}
+      {periodSummary.length > 0 && (
+        <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
+          <button
+            onClick={() => setShowPeriodSummary(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Icon name="BarChart3" size={16} className="text-primary" />
+              <span className="font-semibold text-sm">Сводка за выбранный период</span>
+              <span className="text-xs text-muted-foreground">· {periodSummary.length} позиций</span>
+            </div>
+            <Icon name={showPeriodSummary ? 'ChevronUp' : 'ChevronDown'} size={16} className="text-muted-foreground" />
+          </button>
+          {showPeriodSummary && (
+            <div className="border-t border-border overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40 border-b border-border">
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Товар</th>
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Категория</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Приход</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Расход</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Разница</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {periodSummary.slice(0, 100).map(r => (
+                    <tr key={r.itemId} className="border-b border-border/50 hover:bg-muted/30">
+                      <td className="px-4 py-2 font-medium text-foreground break-words align-top min-w-[160px] max-w-[320px]">{r.itemName}</td>
+                      <td className="px-4 py-2 text-xs" style={{ color: r.categoryColor }}>{r.categoryName}</td>
+                      <td className="px-4 py-2 text-right font-bold tabular-nums text-success whitespace-nowrap">
+                        {r.inQty > 0 ? `+${r.inQty}` : '—'}
+                        {r.inQty > 0 && <span className="text-xs font-normal text-muted-foreground ml-1">{r.unit}</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right font-bold tabular-nums text-destructive whitespace-nowrap">
+                        {r.outQty > 0 ? `-${r.outQty}` : '—'}
+                        {r.outQty > 0 && <span className="text-xs font-normal text-muted-foreground ml-1">{r.unit}</span>}
+                      </td>
+                      <td className={`px-4 py-2 text-right font-bold tabular-nums whitespace-nowrap ${(r.inQty - r.outQty) >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                        {(r.inQty - r.outQty) > 0 ? '+' : ''}{r.inQty - r.outQty}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {periodSummary.length > 100 && (
+                <div className="px-4 py-2 text-xs text-muted-foreground border-t border-border bg-muted/20">
+                  Показано 100 из {periodSummary.length}. Уточните фильтры для точного списка.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Table / list */}
       {enriched.length === 0 ? (

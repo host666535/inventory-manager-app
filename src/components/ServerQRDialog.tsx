@@ -36,7 +36,7 @@ export default function ServerQRDialog({ open, onClose }: { open: boolean; onClo
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-[min(96vw,700px)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon name="QrCode" size={20} />

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
-import { AppState, AssetType, Item, crudAction, generateId, updateLocationStock, updateWarehouseStock } from '@/data/store';
+import { AppState, AssetType, Item, crudAction, generateId, updateLocationStock, updateWarehouseStock, getFloorLocationId } from '@/data/store';
 import { UNITS } from '@/constants/units';
 import { findDuplicateItem } from '@/data/validation';
 import { itemFormSchema, firstError } from '@/data/schemas';
@@ -35,14 +35,14 @@ export default function NewItemModal({ state, onStateChange, onClose }: {
   const doCreate = async () => {
     if (saving) return;
     setSaving(true);
-    const fallbackLeaf = state.locations.find(l => !state.locations.some(ch => ch.parentId === l.id));
+    const floorLocId = getFloorLocationId(state, warehouseId);
     const newItem: Item = {
       id: generateId(),
       name: name.trim(),
       unit,
       assetType,
       categoryId,
-      locationId: locationId || (fallbackLeaf?.id || ''),
+      locationId: locationId || floorLocId,
       description: description.trim() || undefined,
       quantity: parseInt(qty) || 0,
       lowStockThreshold: parseInt(threshold) || 5,
@@ -91,7 +91,7 @@ export default function NewItemModal({ state, onStateChange, onClose }: {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-md animate-scale-in">
+      <DialogContent className="max-w-[min(96vw,700px)] animate-scale-in">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
@@ -173,7 +173,7 @@ export default function NewItemModal({ state, onStateChange, onClose }: {
       </DialogContent>
       {confirmDuplicate && (
         <Dialog open onOpenChange={() => setConfirmDuplicate(null)}>
-          <DialogContent className="max-w-sm">
+          <DialogContent className="max-w-[min(96vw,500px)]">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
