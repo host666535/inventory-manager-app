@@ -103,8 +103,8 @@ export default function App() {
   const [qrOrderId, setQrOrderId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (state.darkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
+    // Превью нового дизайна — всегда тёмная тема
+    document.documentElement.classList.add('dark');
   }, [state.darkMode]);
 
   useEffect(() => {
@@ -278,24 +278,33 @@ export default function App() {
     if (p !== 'assembly')  setQrOrderId(null);
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30">
-        <div className="text-muted-foreground text-sm">Загрузка...</div>
-      </div>
-    );
-  }
+  // ⚠️ ВРЕМЕННО: авторизация отключена для предпросмотра нового дизайна.
+  // Чтобы вернуть — раскомментировать блок ниже.
+  // if (authLoading) {
+  //   return (
+  //     <div className="min-h-screen flex items-center justify-center bg-muted/30">
+  //       <div className="text-muted-foreground text-sm">Загрузка...</div>
+  //     </div>
+  //   );
+  // }
+  // if (!authUser) {
+  //   return (
+  //     <AuthContext.Provider value={authCtx}>
+  //       <TooltipProvider>
+  //         <Toaster position="top-right" />
+  //         <LoginPage />
+  //       </TooltipProvider>
+  //     </AuthContext.Provider>
+  //   );
+  // }
 
-  if (!authUser) {
-    return (
-      <AuthContext.Provider value={authCtx}>
-        <TooltipProvider>
-          <Toaster position="top-right" />
-          <LoginPage />
-        </TooltipProvider>
-      </AuthContext.Provider>
-    );
-  }
+  const previewAuthCtx = authUser ? authCtx : {
+    ...authCtx,
+    user: { id: 'preview', username: 'preview', displayName: 'Гость (превью)', role: 'admin' as const },
+    loading: false,
+    canEdit: true,
+    isAdmin: true,
+  };
 
   if (initialLoading) {
     return (
@@ -327,7 +336,7 @@ export default function App() {
   const wsDisconnected = wsStatus === 'offline';
 
   return (
-    <AuthContext.Provider value={authCtx}>
+    <AuthContext.Provider value={previewAuthCtx}>
       <TooltipProvider>
         <Toaster position="top-right" />
         <Layout
