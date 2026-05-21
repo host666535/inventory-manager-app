@@ -23,13 +23,13 @@ type Props = {
 
 const DAY_NAMES = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 const FALLBACK_COLORS = [
-  "#6366f1",
-  "#0ea5e9",
-  "#10b981",
-  "#f59e0b",
+  "#a855f7",
+  "#d946ef",
   "#8b5cf6",
+  "#c084fc",
   "#ec4899",
-  "#14b8a6",
+  "#7c3aed",
+  "#22d3ee",
 ];
 
 export default function DashboardPage({ state }: Props) {
@@ -131,78 +131,114 @@ export default function DashboardPage({ state }: Props) {
       }));
   }, [state.operations, state.items]);
 
+  // Метрики для круговых индикаторов (фото 4 и 5)
+  const lowStockPct = totalItems > 0 ? Math.round((lowStockItems.length / totalItems) * 100) : 0;
+  const ops7d = ops30d.length; // используем для интенсивности
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5 pb-20 md:pb-0">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Аналитика</h1>
-        <p className="text-muted-foreground text-sm">
-          Обзор складской системы
-        </p>
+    <div className="space-y-6 pb-20 md:pb-0">
+      {/* Hero header — стиль фото 5 (Aaru welcome) */}
+      <div className="relative overflow-hidden rounded-3xl p-6 sm:p-8 glass-card">
+        <div className="absolute -top-10 -right-10 w-64 h-64 rounded-full bg-fuchsia-500/20 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-12 -left-12 w-72 h-72 rounded-full bg-violet-500/20 blur-3xl pointer-events-none" />
+        <div className="relative flex items-start justify-between gap-6 flex-wrap">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-primary/80 mb-2">Stockbase · Neon</p>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground via-primary to-fuchsia-400 bg-clip-text text-transparent">
+              Аналитика склада
+            </h1>
+            <p className="text-muted-foreground text-sm mt-2 max-w-md">
+              Живой пульс ваших товаров: остатки, движения и риски — в одном окне.
+            </p>
+          </div>
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-2xl glass-card text-xs text-muted-foreground">
+            <Icon name="Sparkles" size={14} className="text-primary" />
+            {format(now, "EEEE · dd MMM HH:mm")}
+          </div>
+        </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
-        <SummaryCard
+      {/* Summary Cards — круговые метрики в стиле фото 4 (Skill Points) и фото 5 (Productivity) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <RingCard
           icon="Package"
-          iconBg="bg-blue-500/10 text-blue-500"
           value={totalItems}
           label="Всего товаров"
+          percent={100}
+          color="violet"
         />
-        <SummaryCard
+        <RingCard
           icon="AlertTriangle"
-          iconBg="bg-red-500/10 text-red-500"
           value={lowStockItems.length}
           label="Низкий остаток"
+          percent={lowStockPct}
+          color="rose"
         />
-        <SummaryCard
+        <RingCard
           icon="ArrowUpDown"
-          iconBg="bg-violet-500/10 text-violet-500"
-          value={ops30d.length}
-          label="За 30 дней"
+          value={ops7d}
+          label="Операций / 30 дн"
+          percent={Math.min(100, Math.round(ops7d / 3))}
+          color="fuchsia"
         />
-        <SummaryCard
+        <RingCard
           icon="Warehouse"
-          iconBg="bg-green-500/10 text-green-500"
           value={totalWarehouses}
           label="Складов"
+          percent={100}
+          color="cyan"
         />
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Bar Chart */}
-        <div className="bg-card rounded-xl border shadow-card p-5">
-          <h3 className="font-semibold mb-4">Приход / Расход за 7 дней</h3>
+        {/* Bar Chart — стиль фото 4 Skill Tracker (неоновые столбцы) */}
+        <div className="glass-card rounded-3xl p-5 card-hover">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Icon name="Activity" size={16} className="text-primary" />
+              Приход / Расход за 7 дней
+            </h3>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={barData}>
+              <defs>
+                <linearGradient id="g-in" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#a855f7" stopOpacity={0.95} />
+                  <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.55} />
+                </linearGradient>
+                <linearGradient id="g-out" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f472b6" stopOpacity={0.95} />
+                  <stop offset="100%" stopColor="#be185d" stopOpacity={0.55} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis
-                dataKey="name"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis fontSize={12} tickLine={false} axisLine={false} />
+              <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
+              <YAxis fontSize={12} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
               <Tooltip
+                cursor={{ fill: 'rgba(168,85,247,0.08)' }}
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: 8,
+                  border: "1px solid rgba(192,132,252,0.3)",
+                  borderRadius: 12,
                   fontSize: 13,
+                  boxShadow: "0 12px 32px -8px rgba(168,85,247,0.4)",
                 }}
               />
               <Legend />
-              <Bar dataKey="Приход" fill="#10b981" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 10, fill: 'hsl(var(--foreground))' }} />
-              <Bar dataKey="Расход" fill="#ef4444" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 10, fill: 'hsl(var(--foreground))' }} />
+              <Bar dataKey="Приход" fill="url(#g-in)" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="Расход" fill="url(#g-out)" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* Pie Chart */}
-        <div className="bg-card rounded-xl border shadow-card p-5">
-          <h3 className="font-semibold mb-4">По категориям</h3>
+        <div className="glass-card rounded-3xl p-5 card-hover">
+          <h3 className="font-semibold mb-4 flex items-center gap-2">
+            <Icon name="PieChart" size={16} className="text-primary" />
+            По категориям
+          </h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -226,9 +262,10 @@ export default function DashboardPage({ state }: Props) {
               <Tooltip
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: 8,
+                  border: "1px solid rgba(192,132,252,0.3)",
+                  borderRadius: 12,
                   fontSize: 13,
+                  boxShadow: "0 12px 32px -8px rgba(168,85,247,0.4)",
                 }}
                 formatter={(value: number, name: string) => [`${value} шт.`, name]}
               />
@@ -248,8 +285,11 @@ export default function DashboardPage({ state }: Props) {
       {/* Tables */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Low Stock Table */}
-        <div className="bg-card rounded-xl border shadow-card p-5">
-          <h3 className="font-semibold mb-4">Товары с низким остатком</h3>
+        <div className="glass-card rounded-3xl p-5 card-hover">
+          <h3 className="font-semibold mb-4 flex items-center gap-2">
+            <Icon name="AlertTriangle" size={16} className="text-rose-400" />
+            Товары с низким остатком
+          </h3>
           {lowStockTable.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
               <Icon name="CheckCircle" className="w-10 h-10 mb-2 opacity-40" />
@@ -290,8 +330,11 @@ export default function DashboardPage({ state }: Props) {
         </div>
 
         {/* Recent Operations Table */}
-        <div className="bg-card rounded-xl border shadow-card p-5">
-          <h3 className="font-semibold mb-4">Последние операции</h3>
+        <div className="glass-card rounded-3xl p-5 card-hover">
+          <h3 className="font-semibold mb-4 flex items-center gap-2">
+            <Icon name="History" size={16} className="text-primary" />
+            Последние операции
+          </h3>
           {recentOps.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
               <Icon name="Inbox" className="w-10 h-10 mb-2 opacity-40" />
@@ -355,29 +398,69 @@ export default function DashboardPage({ state }: Props) {
   );
 }
 
-// ── Summary Card Component ────────────────────────────────────────────────────
+// ── Ring Card — круговая метрика в стиле фото 4 / 5 ─────────────────────────
 
-function SummaryCard({
+const RING_PALETTE = {
+  violet:  { from: "#a855f7", to: "#7c3aed", glow: "rgba(168,85,247,0.55)" },
+  fuchsia: { from: "#d946ef", to: "#a21caf", glow: "rgba(217,70,239,0.55)" },
+  rose:    { from: "#fb7185", to: "#e11d48", glow: "rgba(244,63,94,0.55)"  },
+  cyan:    { from: "#22d3ee", to: "#06b6d4", glow: "rgba(34,211,238,0.50)" },
+} as const;
+
+function RingCard({
   icon,
-  iconBg,
   value,
   label,
+  percent,
+  color,
 }: {
   icon: string;
-  iconBg: string;
   value: number;
   label: string;
+  percent: number; // 0..100
+  color: keyof typeof RING_PALETTE;
 }) {
+  const palette = RING_PALETTE[color];
+  const radius = 26;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (Math.max(0, Math.min(100, percent)) / 100) * circumference;
+  const gradId = `ring-${color}`;
+
   return (
-    <div className="bg-card rounded-xl border shadow-card p-5 flex items-start gap-4">
+    <div className="glass-card rounded-3xl p-4 sm:p-5 card-hover relative overflow-hidden">
       <div
-        className={`flex items-center justify-center w-10 h-10 rounded-full shrink-0 ${iconBg}`}
-      >
-        <Icon name={icon} className="w-5 h-5" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-2xl font-bold leading-none">{value}</p>
-        <p className="text-sm text-muted-foreground mt-1">{label}</p>
+        className="absolute -top-8 -right-8 w-24 h-24 rounded-full blur-2xl pointer-events-none"
+        style={{ background: palette.glow }}
+      />
+      <div className="relative flex items-center gap-4">
+        <div className="relative w-16 h-16 shrink-0">
+          <svg viewBox="0 0 64 64" className="w-full h-full -rotate-90">
+            <defs>
+              <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor={palette.from} />
+                <stop offset="100%" stopColor={palette.to} />
+              </linearGradient>
+            </defs>
+            <circle cx="32" cy="32" r={radius} stroke="hsl(var(--border))" strokeWidth="5" fill="none" opacity="0.35" />
+            <circle
+              cx="32" cy="32" r={radius}
+              stroke={`url(#${gradId})`}
+              strokeWidth="5"
+              strokeLinecap="round"
+              fill="none"
+              strokeDasharray={circumference}
+              strokeDashoffset={offset}
+              style={{ filter: `drop-shadow(0 0 6px ${palette.glow})`, transition: "stroke-dashoffset 0.6s ease" }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Icon name={icon} size={18} className="text-foreground" />
+          </div>
+        </div>
+        <div className="min-w-0">
+          <p className="text-2xl sm:text-3xl font-bold leading-none tracking-tight">{value}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1.5">{label}</p>
+        </div>
       </div>
     </div>
   );
