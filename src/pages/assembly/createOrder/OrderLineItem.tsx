@@ -21,7 +21,7 @@ export function OrderLineItem({ state, line, itemOptions, warn, isDup, onUpdate,
 
   return (
     <div className={`rounded-xl border p-3 space-y-2 transition-colors
-      ${isDup ? 'border-destructive/40 bg-destructive/4' : warn?.type === 'error' ? 'border-warning/40 bg-warning/4' : 'border-border bg-muted/30'}`}>
+      ${isDup ? 'border-destructive/40 bg-destructive/10' : warn?.type === 'error' ? 'border-warning/40 bg-warning/10' : 'border-border bg-muted/30'}`}>
       <div className="flex items-center gap-2">
         <div className="flex-1">
           <Autocomplete

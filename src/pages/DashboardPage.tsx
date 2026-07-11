@@ -250,10 +250,10 @@ export default function DashboardPage({ state }: Props) {
                 outerRadius={90}
                 innerRadius={45}
                 paddingAngle={2}
-                label={(entry: { name: string; value: number; percent: number }) =>
-                  `${entry.name}: ${entry.value} (${(entry.percent * 100).toFixed(0)}%)`
+                label={(entry: { percent: number }) =>
+                  entry.percent >= 0.05 ? `${(entry.percent * 100).toFixed(0)}%` : ''
                 }
-                labelLine={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}
+                labelLine={false}
               >
                 {pieData.map((entry, idx) => (
                   <Cell key={idx} fill={entry.color} />

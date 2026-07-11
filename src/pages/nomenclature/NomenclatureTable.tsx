@@ -107,7 +107,7 @@ export default function NomenclatureTable({
                   </td>
                   <td className="px-4 py-3">
                     {cat ? (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: cat.color + '18', color: cat.color }}>{cat.name}</span>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: cat.color + '2E', color: cat.color, border: `1px solid ${cat.color}55` }}>{cat.name}</span>
                     ) : '—'}
                   </td>
                   {warehouses.map(wh => {

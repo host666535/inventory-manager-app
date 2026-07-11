@@ -43,7 +43,7 @@ export default function ItemCard({ item, category, location, locationStocks, onC
         {/* Category badge */}
         {category && (
           <div className="absolute top-2 left-2">
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: catColor + '20', color: catColor }}>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full backdrop-blur-sm shadow-sm" style={{ backgroundColor: catColor + 'E6', color: '#fff' }}>
               {category.name}
             </span>
           </div>

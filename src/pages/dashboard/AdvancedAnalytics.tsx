@@ -41,6 +41,19 @@ function periodRange(period: Period, customFrom: string, customTo: string): { fr
   return { from, to };
 }
 
+function TruncatedTick(props: { x?: number; y?: number; payload?: { value?: string } }) {
+  const { x = 0, y = 0, payload } = props;
+  const raw = String(payload?.value ?? '');
+  const max = 24;
+  const text = raw.length > max ? raw.slice(0, max - 1) + '…' : raw;
+  return (
+    <text x={x} y={y} dy={4} textAnchor="end" fontSize={11} fill="hsl(var(--foreground))">
+      <title>{raw}</title>
+      {text}
+    </text>
+  );
+}
+
 function Section({
   title, icon, defaultOpen = false, children,
 }: { title: string; icon: string; defaultOpen?: boolean; children: React.ReactNode }) {
@@ -398,16 +411,16 @@ export function AdvancedAnalytics({ state }: Props) {
           <div className="text-sm text-muted-foreground text-center py-6">Нет данных за выбранный период</div>
         ) : (
           <>
-            <ResponsiveContainer width="100%" height={Math.max(220, topRecipients.length * 32)}>
-              <BarChart data={topRecipients} layout="vertical" margin={{ left: 10, right: 40 }}>
+            <ResponsiveContainer width="100%" height={Math.max(220, topRecipients.length * 40)}>
+              <BarChart data={topRecipients} layout="vertical" margin={{ left: 10, right: 48 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis type="number" fontSize={11} />
                 <YAxis
                   dataKey="name"
                   type="category"
                   fontSize={11}
-                  width={180}
-                  tick={{ fill: 'hsl(var(--foreground))' }}
+                  width={200}
+                  tick={<TruncatedTick />}
                   interval={0}
                 />
                 <Tooltip
@@ -461,10 +474,10 @@ export function AdvancedAnalytics({ state }: Props) {
                   cy="50%"
                   outerRadius={100}
                   innerRadius={50}
-                  label={(entry: { name: string; value: number; percent: number }) =>
-                    `${entry.name}: ${entry.value} (${(entry.percent * 100).toFixed(0)}%)`
+                  label={(entry: { percent: number }) =>
+                    entry.percent >= 0.05 ? `${(entry.percent * 100).toFixed(0)}%` : ''
                   }
-                  labelLine={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}
+                  labelLine={false}
                 >
                   {byCategory.map((e, i) => <Cell key={i} fill={e.color} />)}
                 </Pie>
@@ -506,7 +519,7 @@ export function AdvancedAnalytics({ state }: Props) {
         ) : (
           <div className="space-y-4">
             {/* Горизонтальный bar chart с НАЗВАНИЯМИ позиций по оси Y */}
-            <ResponsiveContainer width="100%" height={Math.max(260, topItemsOut.length * 28)}>
+            <ResponsiveContainer width="100%" height={Math.max(260, topItemsOut.length * 36)}>
               <BarChart data={topItemsOut} layout="vertical" margin={{ left: 10, right: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis type="number" fontSize={11} />
@@ -514,8 +527,8 @@ export function AdvancedAnalytics({ state }: Props) {
                   dataKey="name"
                   type="category"
                   fontSize={11}
-                  width={180}
-                  tick={{ fill: 'hsl(var(--foreground))' }}
+                  width={200}
+                  tick={<TruncatedTick />}
                   interval={0}
                 />
                 <Tooltip

@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { Item, AppState, AssetType, Category } from '@/data/store';
 import { loadBoard, BoardNode } from '@/pages/technician/BoardView';
+import { UNITS } from '@/constants/units';
 
 type EditedState = {
   name: string;
@@ -47,8 +48,12 @@ export default function ItemDetailInfoTab({
         <div className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground font-medium">Единица измерения</label>
-            <input value={edited.unit} onChange={e => setEdited({...edited, unit: e.target.value})}
-              className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+            <select value={edited.unit} onChange={e => setEdited({...edited, unit: e.target.value})}
+              className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+              {(UNITS.includes(edited.unit) ? UNITS : [edited.unit, ...UNITS]).map(u => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="text-xs text-muted-foreground font-medium">Тип (МЗ/ОС)</label>
