@@ -26,16 +26,16 @@ export default function ItemCard({ item, category, location, locationStocks, onC
   return (
     <button
       onClick={onClick}
-      className="group w-full text-left bg-card rounded-xl border border-border shadow-card hover:shadow-card-hover hover:border-primary/30 transition-all duration-200 overflow-hidden animate-fade-in"
-      style={{ animationDelay: `${index * 40}ms` }}
+      className="group w-full text-left bg-card rounded-xl border border-border shadow-card hover:shadow-card-hover hover:border-primary/40 hover:-translate-y-1.5 transition-all duration-300 overflow-hidden animate-float-in press"
+      style={{ animationDelay: `${Math.min(index, 14) * 45}ms` }}
     >
       {/* Image area */}
       <div className="relative aspect-[4/3] bg-muted overflow-hidden">
         {item.imageUrl ? (
-          <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ease-out" />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2" style={{ backgroundColor: catColor + '14' }}>
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: catColor + '22' }}>
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 transition-colors duration-300" style={{ backgroundColor: catColor + '14' }}>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-1" style={{ backgroundColor: catColor + '22' }}>
               <Icon name={CATEGORY_ICONS[item.categoryId] || 'Package'} size={22} style={{ color: catColor }} />
             </div>
           </div>
@@ -50,8 +50,8 @@ export default function ItemCard({ item, category, location, locationStocks, onC
         )}
         {/* Low stock badge */}
         {isLow && (
-          <div className={`absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold
-            ${isCritical ? 'bg-destructive text-destructive-foreground' : 'bg-warning/90 text-warning-foreground'}`}>
+          <div className={`absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold animate-pop-in
+            ${isCritical ? 'bg-destructive text-destructive-foreground animate-pulse-soft' : 'bg-warning/90 text-warning-foreground'}`}>
             <Icon name="AlertTriangle" size={10} />
             {isCritical ? 'Нет' : 'Мало'}
           </div>

@@ -133,14 +133,14 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
               const active = activePage === n.id;
               return (
                 <button key={n.id} onClick={() => navigate(n.id)}
-                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-all
+                  className={`group relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-300 press hover:-translate-y-0.5
                     ${active
-                      ? 'text-primary-foreground bg-primary shadow-sm'
+                      ? 'text-primary-foreground bg-primary shadow-sm scale-[1.03]'
                       : 'text-muted-foreground hover:text-foreground hover:bg-primary/10'}`}>
-                  <Icon name={n.icon} size={14} />
+                  <Icon name={n.icon} size={14} className={`transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110 group-hover:-rotate-6'}`} />
                   {n.label}
                   {n.badge !== undefined && (
-                    <span className={`ml-0.5 text-[11px] font-bold rounded-full min-w-4 h-4 px-1 flex items-center justify-center leading-none
+                    <span className={`ml-0.5 text-[11px] font-bold rounded-full min-w-4 h-4 px-1 flex items-center justify-center leading-none animate-pop-in
                       ${n.badgeColor === 'blue' ? 'bg-primary text-primary-foreground' : 'bg-destructive text-destructive-foreground'}`}>
                       {n.badge > 9 ? '9+' : n.badge}
                     </span>
@@ -417,7 +417,9 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
             `}</style>
           </div>
         )}
-        {children}
+        <div key={activePage} className="page-enter relative z-10">
+          {children}
+        </div>
       </main>
 
       <ChangePasswordDialog open={pwDialogOpen} onClose={() => setPwDialogOpen(false)} />
@@ -443,12 +445,12 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
             const active = activePage === n.id;
             return (
               <button key={n.id} onClick={() => navigate(n.id)}
-                className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-all relative
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-all press relative
                   ${active ? 'text-primary-foreground' : 'text-muted-foreground'}`}>
                 {active && (
-                  <span className="absolute inset-x-3 inset-y-1.5 rounded-xl bg-primary shadow-sm -z-0" />
+                  <span className="absolute inset-x-3 inset-y-1.5 rounded-xl bg-primary shadow-sm -z-0 animate-pop-in" />
                 )}
-                <Icon name={n.icon} size={20} className="relative z-10" />
+                <Icon name={n.icon} size={20} className={`relative z-10 transition-transform duration-300 ${active ? 'scale-110 -translate-y-0.5' : ''}`} />
                 <span className="leading-tight mt-0.5 relative z-10">{n.label}</span>
                 {n.badge !== undefined && (
                   <span className={`absolute top-1.5 right-[calc(50%-16px)] text-[9px] font-bold rounded-full min-w-3.5 h-3.5 px-1 flex items-center justify-center z-10

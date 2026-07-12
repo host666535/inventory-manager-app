@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { subDays, startOfDay, isAfter, format, parseISO } from "date-fns";
+import { useCountUp } from "@/hooks/useAnimations";
 import {
   BarChart,
   Bar,
@@ -139,19 +140,19 @@ export default function DashboardPage({ state }: Props) {
   return (
     <div className="space-y-6 pb-20 md:pb-0">
       {/* Hero header */}
-      <div className="rounded-2xl p-6 sm:p-8 glass-card">
+      <div className="rounded-2xl p-6 sm:p-8 glass-card animate-blur-in">
         <div className="flex items-start justify-between gap-6 flex-wrap">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">StockBase</p>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2 animate-slide-in-left">StockBase</p>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground animate-slide-in-left" style={{ animationDelay: '0.08s' }}>
               Аналитика склада
             </h1>
-            <p className="text-muted-foreground text-sm mt-2 max-w-md">
+            <p className="text-muted-foreground text-sm mt-2 max-w-md animate-slide-in-left" style={{ animationDelay: '0.16s' }}>
               Остатки, движения и риски — в одном окне.
             </p>
           </div>
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted text-xs text-muted-foreground">
-            <Icon name="Calendar" size={14} className="text-primary" />
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted text-xs text-muted-foreground animate-slide-in-right">
+            <Icon name="Calendar" size={14} className="text-primary animate-floaty" />
             {format(now, "EEEE · dd MMM HH:mm")}
           </div>
         </div>
@@ -165,6 +166,7 @@ export default function DashboardPage({ state }: Props) {
           label="Всего товаров"
           percent={100}
           color="violet"
+          index={0}
         />
         <RingCard
           icon="AlertTriangle"
@@ -172,6 +174,7 @@ export default function DashboardPage({ state }: Props) {
           label="Низкий остаток"
           percent={lowStockPct}
           color="rose"
+          index={1}
         />
         <RingCard
           icon="ArrowUpDown"
@@ -179,6 +182,7 @@ export default function DashboardPage({ state }: Props) {
           label="Операций / 30 дн"
           percent={Math.min(100, Math.round(ops7d / 3))}
           color="fuchsia"
+          index={2}
         />
         <RingCard
           icon="Warehouse"
@@ -186,13 +190,14 @@ export default function DashboardPage({ state }: Props) {
           label="Складов"
           percent={100}
           color="cyan"
+          index={3}
         />
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Bar Chart */}
-        <div className="glass-card rounded-2xl p-5 card-hover">
+        <div className="glass-card rounded-2xl p-5 hover-lift animate-float-in" style={{ animationDelay: '0.35s' }}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold flex items-center gap-2">
               <Icon name="Activity" size={16} className="text-primary" />
@@ -225,14 +230,14 @@ export default function DashboardPage({ state }: Props) {
                 }}
               />
               <Legend />
-              <Bar dataKey="Приход" fill="url(#g-in)" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="Расход" fill="url(#g-out)" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="Приход" fill="url(#g-in)" radius={[8, 8, 0, 0]} animationDuration={900} animationBegin={200} />
+              <Bar dataKey="Расход" fill="url(#g-out)" radius={[8, 8, 0, 0]} animationDuration={900} animationBegin={350} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* Pie Chart */}
-        <div className="glass-card rounded-2xl p-5 card-hover">
+        <div className="glass-card rounded-2xl p-5 hover-lift animate-float-in" style={{ animationDelay: '0.45s' }}>
           <h3 className="font-semibold mb-4 flex items-center gap-2">
             <Icon name="PieChart" size={16} className="text-primary" />
             По категориям
@@ -248,6 +253,8 @@ export default function DashboardPage({ state }: Props) {
                 outerRadius={90}
                 innerRadius={45}
                 paddingAngle={2}
+                animationDuration={1000}
+                animationBegin={250}
                 label={(entry: { percent: number }) =>
                   entry.percent >= 0.05 ? `${(entry.percent * 100).toFixed(0)}%` : ''
                 }
@@ -283,7 +290,7 @@ export default function DashboardPage({ state }: Props) {
       {/* Tables */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Low Stock Table */}
-        <div className="glass-card rounded-2xl p-5 card-hover">
+        <div className="glass-card rounded-2xl p-5 hover-lift animate-float-in" style={{ animationDelay: '0.55s' }}>
           <h3 className="font-semibold mb-4 flex items-center gap-2">
             <Icon name="AlertTriangle" size={16} className="text-destructive" />
             Товары с низким остатком
@@ -305,8 +312,8 @@ export default function DashboardPage({ state }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {lowStockTable.map((item) => (
-                    <tr key={item.id} className="border-b last:border-0">
+                  {lowStockTable.map((item, i) => (
+                    <tr key={item.id} className="border-b last:border-0 animate-slide-in-left hover:bg-muted/40 transition-colors" style={{ animationDelay: `${0.6 + i * 0.04}s` }}>
                       <td className="py-2.5 pr-3 break-words align-top max-w-[140px] sm:max-w-[220px] md:max-w-none">
                         {item.name}
                       </td>
@@ -328,7 +335,7 @@ export default function DashboardPage({ state }: Props) {
         </div>
 
         {/* Recent Operations Table */}
-        <div className="glass-card rounded-2xl p-5 card-hover">
+        <div className="glass-card rounded-2xl p-5 hover-lift animate-float-in" style={{ animationDelay: '0.65s' }}>
           <h3 className="font-semibold mb-4 flex items-center gap-2">
             <Icon name="History" size={16} className="text-primary" />
             Последние операции
@@ -351,8 +358,8 @@ export default function DashboardPage({ state }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentOps.map((op) => (
-                    <tr key={op.id} className="border-b last:border-0">
+                  {recentOps.map((op, i) => (
+                    <tr key={op.id} className="border-b last:border-0 animate-slide-in-right hover:bg-muted/40 transition-colors" style={{ animationDelay: `${0.7 + i * 0.04}s` }}>
                       <td className="py-2.5 pr-3 whitespace-nowrap text-muted-foreground hidden sm:table-cell">
                         {op.formattedDate}
                       </td>
@@ -411,20 +418,36 @@ function RingCard({
   label,
   percent,
   color,
+  index = 0,
 }: {
   icon: string;
   value: number;
   label: string;
   percent: number; // 0..100
   color: keyof typeof RING_PALETTE;
+  index?: number;
 }) {
   const palette = RING_PALETTE[color];
   const radius = 26;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (Math.max(0, Math.min(100, percent)) / 100) * circumference;
+  const clamped = Math.max(0, Math.min(100, percent));
+  const [mounted, setMounted] = useState(false);
+  const animatedValue = useCountUp(value, 1000 + index * 120);
+
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 120 + index * 120);
+    return () => clearTimeout(t);
+  }, [index]);
+
+  const offset = mounted
+    ? circumference - (clamped / 100) * circumference
+    : circumference;
 
   return (
-    <div className="glass-card rounded-2xl p-4 sm:p-5 card-hover">
+    <div
+      className="glass-card rounded-2xl p-4 sm:p-5 hover-lift group animate-pop-in"
+      style={{ animationDelay: `${index * 90}ms` }}
+    >
       <div className="flex items-center gap-4">
         <div className="relative w-16 h-16 shrink-0">
           <svg viewBox="0 0 64 64" className="w-full h-full -rotate-90">
@@ -437,15 +460,17 @@ function RingCard({
               fill="none"
               strokeDasharray={circumference}
               strokeDashoffset={offset}
-              style={{ transition: "stroke-dashoffset 0.6s ease" }}
+              style={{ transition: "stroke-dashoffset 1.1s cubic-bezier(0.22,1,0.36,1)" }}
             />
           </svg>
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:scale-125">
             <Icon name={icon} size={18} style={{ color: palette.color }} />
           </div>
         </div>
         <div className="min-w-0">
-          <p className="text-2xl sm:text-3xl font-bold leading-none tracking-tight">{value}</p>
+          <p className="text-2xl sm:text-3xl font-bold leading-none tracking-tight tabular-nums">
+            {Math.round(animatedValue)}
+          </p>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1.5">{label}</p>
         </div>
       </div>
