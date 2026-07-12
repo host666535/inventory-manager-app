@@ -20,7 +20,7 @@ import AuditPage from '@/pages/AuditPage';
 import DocumentsPage from '@/pages/DocumentsPage';
 import InvoiceTemplatePage from '@/pages/InvoiceTemplatePage';
 import LoginPage from '@/pages/LoginPage';
-import { AuthContext, AuthUser, apiLogin, apiLogout, apiMe, setToken, getToken, clearToken } from '@/data/auth';
+import { AuthContext, AuthUser, apiLogin, apiLogout, apiMe, setToken } from '@/data/auth';
 import InstallPWABanner from '@/components/InstallPWABanner';
 import { realtime, RealtimeStatus } from '@/data/realtime';
 import RealtimeIndicator from '@/components/RealtimeIndicator';
@@ -48,18 +48,33 @@ export default function App() {
     setServerDialogOpen(true);
   }, []);
 
+  // ⚠️ ВРЕМЕННО: авторизация отключена. Автоматически входим тестовым
+  // администратором, экран логина пропускается. Чтобы вернуть вход —
+  // удалить этот useEffect и раскомментировать оригинальный ниже.
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      setAuthLoading(false);
-      return;
-    }
-    apiMe().then(user => {
-      if (user) setAuthUser(user);
-      else clearToken();
-      setAuthLoading(false);
-    });
+    setAuthUser({
+      id: 'temp-admin',
+      username: 'admin',
+      displayName: 'Администратор',
+      role: 'admin',
+    } as AuthUser);
+    setState(prev => ({ ...prev, currentUser: 'Администратор' }));
+    setAuthLoading(false);
   }, []);
+
+  // --- Оригинальная авторизация (временно выключена) ---
+  // useEffect(() => {
+  //   const token = getToken();
+  //   if (!token) {
+  //     setAuthLoading(false);
+  //     return;
+  //   }
+  //   apiMe().then(user => {
+  //     if (user) setAuthUser(user);
+  //     else clearToken();
+  //     setAuthLoading(false);
+  //   });
+  // }, []);
 
   const login = async (username: string, password: string): Promise<string | null> => {
     const result = await apiLogin(username, password);

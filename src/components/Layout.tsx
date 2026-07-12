@@ -113,20 +113,17 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header — фиолетовое стекло */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/65 border-b border-primary/10">
+      {/* Header — чистая шапка */}
+      <header className="sticky top-0 z-40 backdrop-blur-md bg-background/80 border-b border-border">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
           {/* Logo */}
           <div className="flex items-center gap-2.5 shrink-0">
-            <div className="relative w-10 h-10 rounded-2xl flex items-center justify-center
-              bg-gradient-to-br from-violet-500 via-fuchsia-500 to-purple-600
-              shadow-[0_8px_24px_-6px_rgba(168,85,247,0.6)]">
-              <Icon name="Boxes" size={18} className="text-white relative z-10 drop-shadow" />
-              <div className="absolute inset-0 rounded-2xl bg-white/15 blur-sm" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary">
+              <Icon name="Boxes" size={18} className="text-primary-foreground" />
             </div>
             <div className="hidden sm:flex flex-col leading-none">
-              <span className="font-bold text-base tracking-tight bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">StockBase</span>
-              <span className="text-[10px] uppercase tracking-[0.18em] text-primary/70 mt-0.5">Inventory · Neon</span>
+              <span className="font-bold text-base tracking-tight text-foreground">StockBase</span>
+              <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mt-0.5">Управление складом</span>
             </div>
           </div>
 
@@ -138,13 +135,13 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
                 <button key={n.id} onClick={() => navigate(n.id)}
                   className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-all
                     ${active
-                      ? 'text-white bg-gradient-to-r from-violet-500 to-fuchsia-500 shadow-[0_8px_20px_-6px_rgba(168,85,247,0.7)]'
+                      ? 'text-primary-foreground bg-primary shadow-sm'
                       : 'text-muted-foreground hover:text-foreground hover:bg-primary/10'}`}>
                   <Icon name={n.icon} size={14} />
                   {n.label}
                   {n.badge !== undefined && (
                     <span className={`ml-0.5 text-[11px] font-bold rounded-full min-w-4 h-4 px-1 flex items-center justify-center leading-none
-                      ${n.badgeColor === 'blue' ? 'bg-fuchsia-400 text-purple-950' : 'bg-rose-500 text-white shadow-md shadow-rose-500/40'}`}>
+                      ${n.badgeColor === 'blue' ? 'bg-primary text-primary-foreground' : 'bg-destructive text-destructive-foreground'}`}>
                       {n.badge > 9 ? '9+' : n.badge}
                     </span>
                   )}
@@ -156,7 +153,7 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
                 <button onClick={() => setDesktopMoreOpen(!desktopMoreOpen)}
                   className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-sm font-medium transition-all
                     ${desktopMoreIsActive
-                      ? 'text-white bg-gradient-to-r from-violet-500 to-fuchsia-500 shadow-[0_8px_20px_-6px_rgba(168,85,247,0.7)]'
+                      ? 'text-primary-foreground bg-primary shadow-sm'
                       : 'text-muted-foreground hover:text-foreground hover:bg-primary/10'}`}>
                   <Icon name="MoreHorizontal" size={16} />
                 </button>
@@ -166,7 +163,7 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
                       <button key={n.id} onClick={() => { navigate(n.id); setDesktopMoreOpen(false); }}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-all
                           ${activePage === n.id
-                            ? 'text-white bg-gradient-to-r from-violet-500 to-fuchsia-500 shadow-md shadow-fuchsia-500/30'
+                            ? 'text-primary-foreground bg-primary shadow-sm'
                             : 'text-muted-foreground hover:text-foreground hover:bg-primary/10'}`}>
                         <Icon name={n.icon} size={14} />
                         {n.label}
@@ -192,11 +189,11 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
                 title="Уведомления">
                 <Icon name="Bell" size={16} />
                 {notifCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-background shadow-md shadow-rose-500/50" />
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-destructive ring-2 ring-background" />
                 )}
               </button>
               {notifOpen && (
-                <div className="absolute right-0 top-12 w-80 glass-card rounded-2xl shadow-2xl shadow-purple-900/30 z-50 overflow-hidden animate-fade-in">
+                <div className="absolute right-0 top-12 w-80 glass-card rounded-2xl shadow-xl z-50 overflow-hidden animate-fade-in">
                   <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                     <span className="font-semibold text-sm">Уведомления</span>
                     {notifCount > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-destructive/15 text-destructive font-bold">{notifCount}</span>}
@@ -259,7 +256,7 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
             </button>
             <div className="hidden sm:flex items-center gap-2">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl glass-card text-sm font-medium">
-                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-white text-[10px] font-bold shadow-md shadow-fuchsia-500/40">
+                <div className="w-6 h-6 rounded-lg bg-primary flex items-center justify-center text-primary-foreground text-[10px] font-bold">
                   {(authUser?.displayName || state.currentUser || 'U').slice(0, 1).toUpperCase()}
                 </div>
                 <span className="max-w-24 truncate text-foreground">{authUser?.displayName || state.currentUser}</span>
@@ -270,7 +267,7 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
               <button onClick={() => setPwDialogOpen(true)} className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-primary bg-primary/5 hover:bg-primary/15 border border-primary/10 transition-colors" title="Сменить пароль">
                 <Icon name="KeyRound" size={15} />
               </button>
-              <button onClick={() => logout()} className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-rose-400 bg-primary/5 hover:bg-rose-500/15 border border-primary/10 transition-colors" title="Выйти">
+              <button onClick={() => logout()} className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-destructive bg-primary/5 hover:bg-destructive/10 border border-border transition-colors" title="Выйти">
                 <Icon name="LogOut" size={15} />
               </button>
             </div>
@@ -284,20 +281,20 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
 
         {/* Tablet dropdown menu — full grid */}
         {mobileMenuOpen && (
-          <div className="xl:hidden border-t border-primary/10 backdrop-blur-xl bg-background/80 px-3 py-3 grid grid-cols-4 sm:grid-cols-8 gap-1.5 animate-fade-in">
+          <div className="xl:hidden border-t border-border backdrop-blur-md bg-background/90 px-3 py-3 grid grid-cols-4 sm:grid-cols-8 gap-1.5 animate-fade-in">
             {navItems.map(n => {
               const active = activePage === n.id;
               return (
                 <button key={n.id} onClick={() => navigate(n.id)}
                   className={`relative flex flex-col items-center gap-1.5 px-1 py-3 rounded-xl text-[10px] font-medium transition-all
                     ${active
-                      ? 'text-white bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-fuchsia-500/40'
-                      : 'text-muted-foreground hover:text-foreground bg-primary/[0.04] hover:bg-primary/10 border border-primary/10'}`}>
+                      ? 'text-primary-foreground bg-primary shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground bg-primary/[0.04] hover:bg-primary/10 border border-border'}`}>
                   <Icon name={n.icon} size={18} />
                   <span className="leading-tight text-center">{n.label}</span>
                   {n.badge !== undefined && (
                     <span className={`absolute top-1 right-1 text-[9px] font-bold rounded-full min-w-3.5 h-3.5 px-1 flex items-center justify-center
-                      ${n.badgeColor === 'blue' ? 'bg-fuchsia-400 text-purple-950' : 'bg-rose-500 text-white'}`}>
+                      ${n.badgeColor === 'blue' ? 'bg-primary text-primary-foreground' : 'bg-destructive text-destructive-foreground'}`}>
                       {n.badge > 9 ? '9+' : n.badge}
                     </span>
                   )}
@@ -310,13 +307,13 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
 
       {/* Low stock banner */}
       {lowStockCount > 0 && activePage !== 'catalog' && activePage !== 'nomenclature' && (
-        <div className="bg-gradient-to-r from-rose-500/10 via-rose-500/15 to-transparent border-b border-rose-500/20 px-4 py-2 backdrop-blur-sm">
+        <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-2 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto flex items-center gap-2 text-sm">
-            <Icon name="AlertTriangle" size={13} className="text-rose-400 shrink-0" />
-            <span className="text-rose-300 font-medium">
+            <Icon name="AlertTriangle" size={13} className="text-destructive shrink-0" />
+            <span className="text-destructive font-medium">
               {lowStockCount} {lowStockCount === 1 ? 'товар' : lowStockCount < 5 ? 'товара' : 'товаров'} с низким остатком
             </span>
-            <button onClick={() => navigate('catalog')} className="ml-auto text-rose-300/80 hover:text-rose-300 text-xs underline underline-offset-2">
+            <button onClick={() => navigate('catalog')} className="ml-auto text-destructive/80 hover:text-destructive text-xs underline underline-offset-2">
               Посмотреть
             </button>
           </div>
@@ -439,23 +436,23 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
         }}
       />
 
-      {/* Mobile bottom nav — плавающая фиолетовая капсула */}
+      {/* Mobile bottom nav — плавающая капсула */}
       <nav className="xl:hidden fixed bottom-3 left-3 right-3 z-40 safe-bottom">
-        <div className="glass-card rounded-2xl flex h-16 shadow-2xl shadow-purple-900/40">
+        <div className="glass-card rounded-2xl flex h-16 shadow-xl">
           {mobileNavPrimary.map(n => {
             const active = activePage === n.id;
             return (
               <button key={n.id} onClick={() => navigate(n.id)}
                 className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-all relative
-                  ${active ? 'text-white' : 'text-muted-foreground'}`}>
+                  ${active ? 'text-primary-foreground' : 'text-muted-foreground'}`}>
                 {active && (
-                  <span className="absolute inset-x-3 inset-y-1.5 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-fuchsia-500/40 -z-0" />
+                  <span className="absolute inset-x-3 inset-y-1.5 rounded-xl bg-primary shadow-sm -z-0" />
                 )}
                 <Icon name={n.icon} size={20} className="relative z-10" />
                 <span className="leading-tight mt-0.5 relative z-10">{n.label}</span>
                 {n.badge !== undefined && (
                   <span className={`absolute top-1.5 right-[calc(50%-16px)] text-[9px] font-bold rounded-full min-w-3.5 h-3.5 px-1 flex items-center justify-center z-10
-                    ${n.badgeColor === 'blue' ? 'bg-fuchsia-400 text-purple-950' : 'bg-rose-500 text-white shadow-md shadow-rose-500/40'}`}>
+                    ${n.badgeColor === 'blue' ? 'bg-primary text-primary-foreground' : 'bg-destructive text-destructive-foreground'}`}>
                     {n.badge > 9 ? '9+' : n.badge}
                   </span>
                 )}
@@ -467,20 +464,20 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
             <button
               onClick={() => setMoreMenuOpen(!moreMenuOpen)}
               className={`w-full h-full flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-all relative
-                ${moreIsActive ? 'text-white' : 'text-muted-foreground'}`}
+                ${moreIsActive ? 'text-primary-foreground' : 'text-muted-foreground'}`}
             >
               {moreIsActive && (
-                <span className="absolute inset-x-3 inset-y-1.5 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-fuchsia-500/40 -z-0" />
+                <span className="absolute inset-x-3 inset-y-1.5 rounded-xl bg-primary shadow-sm -z-0" />
               )}
               <Icon name={moreMenuOpen ? 'X' : 'MoreHorizontal'} size={20} className="relative z-10" />
               <span className="leading-tight mt-0.5 relative z-10">Ещё</span>
               {mobileNavMore.some(n => n.badge) && !moreMenuOpen && (
-                <span className="absolute top-1.5 right-[calc(50%-16px)] text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center bg-rose-500 text-white z-10 shadow-md shadow-rose-500/40">!</span>
+                <span className="absolute top-1.5 right-[calc(50%-16px)] text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center bg-destructive text-destructive-foreground z-10">!</span>
               )}
             </button>
 
             {moreMenuOpen && (
-              <div className="absolute bottom-full right-0 mb-2 w-56 glass-card rounded-2xl overflow-hidden animate-scale-in shadow-2xl shadow-purple-900/40">
+              <div className="absolute bottom-full right-0 mb-2 w-56 glass-card rounded-2xl overflow-hidden animate-scale-in shadow-xl">
                 <div className="p-1.5">
                   {mobileNavMore.map(n => {
                     const active = activePage === n.id;
@@ -489,16 +486,16 @@ export default function Layout({ state, onStateChange, activePage, onPageChange,
                         key={n.id}
                         onClick={() => navigate(n.id)}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
-                          ${active ? 'text-white bg-gradient-to-r from-violet-500 to-fuchsia-500 shadow-md shadow-fuchsia-500/40' : 'text-foreground hover:bg-primary/10'}`}
+                          ${active ? 'text-primary-foreground bg-primary shadow-sm' : 'text-foreground hover:bg-primary/10'}`}
                       >
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0
-                          ${active ? 'bg-white/15 text-white' : 'bg-primary/10 text-muted-foreground'}`}>
+                          ${active ? 'bg-white/20 text-primary-foreground' : 'bg-primary/10 text-muted-foreground'}`}>
                           <Icon name={n.icon} size={15} />
                         </div>
                         <span>{n.label}</span>
                         {n.badge !== undefined && (
                           <span className={`ml-auto text-[11px] font-bold px-1.5 py-0.5 rounded-full
-                            ${n.badgeColor === 'blue' ? 'bg-fuchsia-400/20 text-fuchsia-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                            ${n.badgeColor === 'blue' ? 'bg-primary/20 text-primary' : 'bg-destructive/20 text-destructive'}`}>
                             {n.badge}
                           </span>
                         )}
